@@ -47,6 +47,7 @@ export function renderReportPage(r: WorkspaceReport, opts: { refreshHref: string
         d: p.date,
         m: p.month,
         i: p.imageId ? `/relatorio/img/${p.imageId}?s=${sign("i", p.imageId)}` : "",
+        v: p.videoId ? `/relatorio/vthumb/${p.videoId}?s=${sign("v", p.videoId)}` : "",
         l: p.slides,
         u: p.postUrl || "",
         n: p.networks,
@@ -166,7 +167,9 @@ main{padding-block:22px 10px;display:grid;gap:22px}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}
 .card{background:var(--branco);border:1px solid var(--linha);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;min-width:0}
 .thumb{position:relative;aspect-ratio:4/5;background:var(--verde-claro)}
-.thumb img{width:100%;height:100%;object-fit:cover}
+.thumb img{position:relative;width:100%;height:100%;object-fit:cover}
+.play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:46px;height:46px;border-radius:50%;background:rgba(10,61,41,.72);color:#fff;display:grid;place-items:center;pointer-events:none}
+.play .ms{font-size:30px}
 .ph{position:absolute;inset:0;display:grid;place-items:center;color:var(--verde)}
 .ph .ms{font-size:42px;opacity:.65}
 .tipo{position:absolute;left:8px;top:8px;display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;padding:3px 8px 3px 6px;border-radius:999px;background:rgba(255,255,255,.95)}
@@ -417,7 +420,10 @@ function lados(arr){
 // ---- galeria
 var LIM=60,limite=LIM;
 function card(p){
-  var img=p.i?'<img loading="lazy" src="'+p.i+'" alt="'+esc(p.t)+'">':'<div class="ph"><span class="ms">'+ICON[p.k]+'</span></div>';
+  var ph='<div class="ph"><span class="ms">'+ICON[p.k]+'</span></div>';
+  var img=p.i?'<img loading="lazy" src="'+p.i+'" alt="'+esc(p.t)+'">'
+    :p.v?ph+'<img loading="lazy" src="'+p.v+'" alt="'+esc(p.t)+'" onerror="this.remove()"><span class="play"><span class="ms">play_arrow</span></span>'
+    :ph;
   var info=[db(p.d),p.k==="carrossel"&&p.l>1?p.l+" lâminas":"",p.n.join(", ")].filter(Boolean).join(" · ");
   return '<article class="card"><div class="thumb">'+img+'<span class="tipo"><span class="ms" style="color:'+COR[p.k]+'">'+ICON[p.k]+'</span>'+esc(D.kinds[p.k])+'</span><span class="sit" style="background:'+STCOR[p.s]+'">'+esc(D.status[p.s])+'</span></div><div class="corpo"><h4>'+esc(p.t)+'</h4><p class="info">'+esc(info)+'</p>'+(p.u?'<a href="'+esc(p.u)+'" target="_blank" rel="noopener">Ver publicação <span class="ms">arrow_forward</span></a>':'')+'</div></article>';
 }

@@ -31,7 +31,8 @@ export interface Piece {
   title: string;
   date: string;            // AAAA-MM-DD usada para o mês
   month: string;           // AAAA-MM
-  imageId: number | null;  // artefato de capa
+  imageId: number | null;  // artefato de capa (imagem)
+  videoId: number | null;  // artefato de vídeo (capa gerada a partir de um quadro)
   slides: number;          // imagens no formulário (carrossel)
   approved: boolean;
   published: boolean;
@@ -187,6 +188,7 @@ export function formToPiece(f: Record<string, any>, task: Record<string, any>): 
     date,
     month: date.slice(0, 7),
     imageId: typeof f.thumbnailId === "number" && !VIDEO_EXT.test(`${f.thumbnail?.name ?? ""}`) ? f.thumbnailId : null,
+    videoId: typeof f.thumbnailId === "number" && VIDEO_EXT.test(`${f.thumbnail?.name ?? ""}`) ? f.thumbnailId : null,
     slides: images.length,
     approved: tags.some((t) => /aprovad/i.test(`${t?.name ?? ""}`)),
     published,
@@ -248,6 +250,7 @@ export async function buildWorkspaceReport(workspaceId: number): Promise<Workspa
         date,
         month: date.slice(0, 7),
         imageId: null,
+        videoId: null,
         slides: 0,
         approved: false,
         published: false,
@@ -296,11 +299,11 @@ function secret(): string {
   );
 }
 
-export function sign(kind: "r" | "i", id: number | string): string {
+export function sign(kind: "r" | "i" | "v", id: number | string): string {
   return createHmac("sha256", secret()).update(`${kind}:${id}`).digest("hex").slice(0, 24);
 }
 
-export function verify(kind: "r" | "i", id: number | string, sig: unknown): boolean {
+export function verify(kind: "r" | "i" | "v", id: number | string, sig: unknown): boolean {
   return typeof sig === "string" && sig.length === 24 && sign(kind, id) === sig;
 }
 
@@ -313,5 +316,31 @@ export async function downloadArtifact(artifactId: number): Promise<{ buf: Buffe
   return {
     buf: Buffer.from(res.data),
     type: `${res.headers["content-type"] ?? "application/octet-stream"}`,
+  };
+}
+
+/**
+ * Endereço de onde o ffmpeg pode ler o vídeo.
+ * Se o eKyte redireciona para um link temporário (S3), usa esse link sem cabeçalhos;
+ * senão, lê do próprio eKyte com o token.
+ */
+export async function videoSource(artifactId: number): Promise<{ url: string; headers: string }> {
+  const path = companyUrl(`artifacts/${artifactId}/download`);
+  const client = getRawClient();
+  const res = await client.get(path, {
+    maxRedirects: 0,
+    responseType: "stream",
+    validateStatus: (s) => s >= 200 && s < 400,
+  });
+  const loc = res.headers["location"];
+  (res.data as NodeJS.ReadableStream & { destroy?: () => void })?.destroy?.();
+  if (res.status >= 300 && typeof loc === "string" && loc) {
+    return { url: loc, headers: "" };
+  }
+  const base = `${client.defaults.baseURL ?? ""}`.replace(/\/+$/, "");
+  const auth = `${client.defaults.headers?.["Authorization"] ?? (client.defaults.headers as any)?.common?.Authorization ?? ""}`;
+  return {
+    url: base + path,
+    headers: `Authorization: ${auth}\r\nOrigin: https://app.ekyte.com\r\nReferer: https://app.ekyte.com/\r\n`,
   };
 }

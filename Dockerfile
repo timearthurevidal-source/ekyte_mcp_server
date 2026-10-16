@@ -15,6 +15,9 @@ RUN npm run build
 # Production stage
 FROM node:20-alpine
 
+# ffmpeg: extrai um quadro dos vídeos para servir de capa no relatório
+RUN apk add --no-cache ffmpeg
+
 WORKDIR /app
 
 # Copy package files and install production dependencies only
