@@ -104,7 +104,10 @@ export function isWorkingForm(f: Record<string, any>): boolean {
 }
 
 /** Classifica uma publicação do Ekyte. */
-export function classifyForm(f: Record<string, any>, taskType: string, taskTitle = ""): PieceKind {
+/** Workspaces em que o formato "Linkedln" (texto, sem imagem) conta como Blog/LinkedIn. Talst. */
+const LINKEDLN_COMO_ARTIGO = new Set<number>([113926]);
+
+export function classifyForm(f: Record<string, any>, taskType: string, taskTitle = "", workspaceId = 0): PieceKind {
   const name = `${f.form?.name ?? ""}`.toLowerCase();
   const channels: any[] = Array.isArray(f.ctcTaskFormChannel) ? f.ctcTaskFormChannel : [];
   const thumb = `${f.thumbnail?.name ?? ""}`;
@@ -122,8 +125,9 @@ export function classifyForm(f: Record<string, any>, taskType: string, taskTitle
   // Capa de vídeo feita pela equipe é arte, não vídeo (ex.: "Capa video Augusto Tik Tok").
   if (/^\s*capa\b/i.test(`${f.formName ?? ""}`)) return "estatico";
   if (/reel|tiktok|short/.test(name) && !f.thumbnailId) return "video";
-  // "Linkedln" (com L minúsculo no lugar do i) é como o formato aparece em alguns workspaces.
-  if (/blog|artigo|linkedin|linkedln/.test(name) && !f.thumbnailId) return "artigo";
+  if (/blog|artigo|linkedin/.test(name) && !f.thumbnailId) return "artigo";
+  // "Linkedln" (grafia do eKyte): só vira artigo nos workspaces listados; Bagueira e Augusto seguem como estático.
+  if (/linkedln/.test(name) && !f.thumbnailId && LINKEDLN_COMO_ARTIGO.has(workspaceId)) return "artigo";
   if (/e-?mail/i.test(taskType)) return "email";
   return "estatico";
 }
@@ -189,7 +193,7 @@ export function formToPiece(f: Record<string, any>, task: Record<string, any>): 
     taskType,
     formId: f.id ?? null,
     format: `${f.form?.name ?? ""}`,
-    kind: classifyForm(f, taskType, `${task.title ?? ""}`),
+    kind: classifyForm(f, taskType, `${task.title ?? ""}`, Number(task.workspace?.id ?? task.workspaceId ?? 0)),
     title: clean(f.formName || f.description || task.title),
     date,
     month: date.slice(0, 7),
