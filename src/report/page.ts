@@ -216,7 +216,7 @@ footer img{height:32px;width:auto}
 footer p{margin:6px 0 0;font-size:13.5px}
 footer .dir{text-align:right;font-size:13px}
 footer a{color:#fff}
-${b.logoClara && b.logoEscura ? "" : ".marca-txt{font-weight:800;font-size:20px;letter-spacing:-.01em;color:var(--tinta)}\nfooter .marca-txt{color:#fff}\n"}
+${b.logoAltura ? `.top img{height:${b.logoAltura.topo}px}\nfooter img{height:${b.logoAltura.rodape}px}\n` : ""}${b.logoClara && b.logoEscura ? "" : ".marca-txt{font-weight:800;font-size:20px;letter-spacing:-.01em;color:var(--tinta)}\nfooter .marca-txt{color:#fff}\n"}
 @media (max-width:1000px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.duo{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:640px){
   .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}

@@ -43,6 +43,8 @@ export interface Brand {
   logoClara?: string;
   /** Logo para fundo escuro (rodapé). Sem logo, aparece o nome. */
   logoEscura?: string;
+  /** Altura das logos em px (padrão: 36 no topo, 32 no rodapé). Útil para logo quadrada. */
+  logoAltura?: { topo: number; rodape: number };
   /** Ícone Material Symbols ao lado de "Arthur & Vidal para …". */
   icone: string;
   /** Nome da fonte (família CSS) e link do Google Fonts. */
@@ -50,6 +52,8 @@ export interface Brand {
   fonteUrl?: string;
   cores: BrandColors;
 }
+
+import { AUGUSTO_LOGO_ESCURA_PARA_FUNDO_CLARO, AUGUSTO_LOGO_GELO_PARA_FUNDO_ESCURO } from "./logos-augusto.js";
 
 const HEEBO = "https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap";
 
@@ -86,13 +90,22 @@ const AUGUSTO_ESTEVES: Brand = {
   nomeCompleto: "Augusto Esteves Jr.",
   titulo: "Tudo o que criamos para o Augusto",
   assinatura: "Clareza de cenário, estratégia e decisão bem feita.",
-  // logo do site (verde-claro, para fundo escuro); falta a versão para fundo claro
-  logoEscura: "https://augustoesteves.com.br/assets/images/logo-verde-claro.png",
+  // logos oficiais (Drive do cliente): verde escuro no topo, gelo no rodapé
+  logoClara: AUGUSTO_LOGO_ESCURA_PARA_FUNDO_CLARO,
+  logoEscura: AUGUSTO_LOGO_GELO_PARA_FUNDO_ESCURO,
+  logoAltura: { topo: 54, rodape: 64 },
   icone: "apartment",
   fonte: "Heebo",
   fonteUrl: HEEBO,
-  // cores ainda neutras: o site não deixou ler os hexas — trocar quando confirmados
-  cores: NEUTRA_CORES,
+  // Paleta das logos oficiais: verde escuro #3d6868, verde claro #729191, chumbo #4d4d4d, gelo #f5f5f5.
+  // Os demais tons são variações mais claras/escuras dessas cores.
+  cores: {
+    marca: "#3d6868", marcaEscura: "#2e5050", marcaClara: "#e8eeee", marcaLinha: "#c6d4d4",
+    tinta: "#1f2b2b", cinza: "#4d4d4d", linha: "#dce3e3", fundo: "#f5f5f5",
+    filtrosFundo: "rgba(245,245,245,.96)", totalLegenda: "#d3e0e0", rodapeTexto: "#d3e0e0",
+    carrossel: "#729191", estatico: "#a8bcbc", video: "#3d6868", email: "#9a9a9a", artigo: "#4d4d4d",
+    publicada: "#3d6868", agendada: "#4d4d4d", entregue: "#8fabab", producao: "#b5b5b5",
+  },
 };
 
 export const BRANDS: Record<number, Brand> = {
