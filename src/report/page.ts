@@ -1,34 +1,16 @@
 /**
- * Página HTML do relatório de entregas — visual inspirado em bagueiraseguros.com.br
+ * Painel dinâmico de entregas — visual inspirado em bagueiraseguros.com.br
  * (logo oficial do site, Heebo, verde institucional, cards e ícones Material).
+ *
+ * O servidor embute os dados (lidos ao vivo do eKyte) e o navegador recalcula
+ * totais, gráfico, redes, situação e galeria a cada filtro.
  * Para ajustar a cor da marca, mude só --verde e --verde-escuro abaixo.
  */
 
-import { KIND_LABEL, Piece, PieceKind, WorkspaceReport, sign } from "../services/publications.js";
+import { KIND_LABEL, STATUS_LABEL, WorkspaceReport, sign } from "../services/publications.js";
 
 const LOGO_PRETO = "https://bagueiraseguros.com.br/05bagueira_horizontal_preto.webp?v=20260622-8";
 const LOGO_BRANCO = "https://bagueiraseguros.com.br/03bagueira_horizontal_branco.webp?v=20260622-8";
-
-const KINDS: PieceKind[] = ["carrossel", "estatico", "video", "email", "artigo"];
-const ICON: Record<PieceKind, string> = {
-  carrossel: "view_carousel",
-  estatico: "image",
-  video: "smart_display",
-  email: "mail",
-  artigo: "article",
-};
-const PLURAL: Record<PieceKind, string> = {
-  carrossel: "Carrosséis",
-  estatico: "Estáticos",
-  video: "Vídeos",
-  email: "E-mails marketing",
-  artigo: "Blog / LinkedIn",
-};
-const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-const MESES_LONGOS = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
-];
 
 function esc(s: unknown): string {
   return String(s ?? "")
@@ -38,122 +20,41 @@ function esc(s: unknown): string {
     .replace(/"/g, "&quot;");
 }
 
-function mesCurto(ym: string): string {
-  const [y, m] = ym.split("-").map(Number);
-  return m ? `${MESES[m - 1]}/${String(y).slice(2)}` : "sem data";
-}
-function mesLongo(ym: string): string {
-  const [y, m] = ym.split("-").map(Number);
-  return m ? `${MESES_LONGOS[m - 1]} de ${y}` : "Sem data";
-}
-function dataBr(d: string): string {
-  const [y, m, dd] = d.split("-");
-  return dd ? `${dd}/${m}/${y}` : "";
-}
-
-function count(pieces: Piece[]): Record<PieceKind, number> {
-  const c = { carrossel: 0, estatico: 0, video: 0, email: 0, artigo: 0 } as Record<PieceKind, number>;
-  for (const p of pieces) c[p.kind]++;
-  return c;
-}
-
-function chart(months: string[], byMonth: Map<string, Piece[]>): string {
-  const series: PieceKind[] = ["carrossel", "estatico", "video", "email"];
-  const totals = months.map((m) => series.reduce((s, k) => s + count(byMonth.get(m) ?? [])[k], 0));
-  const max = Math.max(4, ...totals);
-  const step = max <= 10 ? 2 : max <= 25 ? 5 : 10;
-  const top = Math.ceil(max / step) * step;
-  const W = Math.max(560, months.length * 56 + 60);
-  const H = 240, L = 36, B = 30, T = 14;
-  const plotH = H - B - T;
-  const bw = Math.min(30, ((W - L - 10) / months.length) * 0.6);
-  const x = (i: number) => L + ((W - L - 10) / months.length) * (i + 0.5);
-  const y = (v: number) => T + plotH - (v / top) * plotH;
-
-  let grid = "";
-  for (let v = 0; v <= top; v += step) {
-    grid += `<line x1="${L}" x2="${W - 6}" y1="${y(v)}" y2="${y(v)}" class="g"/>` +
-      `<text x="${L - 8}" y="${y(v) + 4}" class="ax" text-anchor="end">${v}</text>`;
-  }
-  let bars = "";
-  months.forEach((m, i) => {
-    const c = count(byMonth.get(m) ?? []);
-    let acc = 0;
-    for (const k of series) {
-      if (!c[k]) continue;
-      const y0 = y(acc), y1 = y(acc + c[k]);
-      bars += `<rect x="${x(i) - bw / 2}" y="${y1}" width="${bw}" height="${Math.max(0, y0 - y1 - 1.5)}" class="s-${k}"><title>${esc(mesCurto(m))} · ${KIND_LABEL[k]}: ${c[k]}</title></rect>`;
-      acc += c[k];
-    }
-    if (totals[i]) bars += `<text x="${x(i)}" y="${y(totals[i]) - 6}" text-anchor="middle" class="tot">${totals[i]}</text>`;
-    bars += `<text x="${x(i)}" y="${H - 10}" text-anchor="middle" class="ax">${esc(mesCurto(m))}</text>`;
-  });
-  return `<div class="chart-wrap"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Peças por mês">${grid}${bars}</svg></div>`;
-}
-
-function card(p: Piece): string {
-  const img = p.imageId
-    ? `<img loading="lazy" src="/relatorio/img/${p.imageId}?s=${sign("i", p.imageId)}" alt="${esc(p.title)}">`
-    : `<div class="ph"><span class="material-symbols-outlined">${ICON[p.kind]}</span></div>`;
-  const meta = [dataBr(p.date), p.kind === "carrossel" && p.slides > 1 ? `${p.slides} lâminas` : ""].filter(Boolean).join(" · ");
-  const link = p.postUrl
-    ? `<a class="post" href="${esc(p.postUrl)}" target="_blank" rel="noopener">Ver publicação <span class="material-symbols-outlined">arrow_forward</span></a>`
-    : "";
-  return `<article class="piece" data-kind="${p.kind}">
-  <div class="thumb">${img}<span class="badge b-${p.kind}"><span class="material-symbols-outlined">${ICON[p.kind]}</span>${KIND_LABEL[p.kind]}</span></div>
-  <div class="pbody"><h4>${esc(p.title)}</h4><p class="meta">${esc(meta)}</p>${link}</div>
-</article>`;
+/** JSON seguro para dentro de <script>. */
+function jsonForScript(v: unknown): string {
+  return JSON.stringify(v)
+    .replace(/</g, "\\u003c")
+    .split(String.fromCharCode(0x2028)).join("\\u2028")
+    .split(String.fromCharCode(0x2029)).join("\\u2029");
 }
 
 export function renderReportPage(r: WorkspaceReport, opts: { refreshHref: string }): string {
-  const pieces = r.pieces.filter((p) => p.month);
-  const byMonth = new Map<string, Piece[]>();
-  for (const p of pieces) {
-    if (!byMonth.has(p.month)) byMonth.set(p.month, []);
-    byMonth.get(p.month)!.push(p);
-  }
-  const monthsAsc = [...byMonth.keys()].sort();
-  const monthsDesc = [...monthsAsc].reverse();
-  const tot = count(pieces);
-  const periodo = monthsAsc.length
-    ? `${mesLongo(monthsAsc[0]).toLowerCase()} a ${mesLongo(monthsAsc[monthsAsc.length - 1]).toLowerCase()}`
-    : "";
-  const gerado = new Date(r.generatedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "long", timeStyle: "short" });
-  const publicadas = pieces.filter((p) => p.published).length;
-
-  const kpis = (["carrossel", "estatico", "video", "email"] as PieceKind[])
-    .map((k) => `<div class="kpi"><span class="material-symbols-outlined ic-${k}">${ICON[k]}</span><strong>${tot[k]}</strong><span>${PLURAL[k]}</span></div>`)
-    .join("");
-
-  const tableRows = monthsDesc
-    .map((m) => {
-      const c = count(byMonth.get(m)!);
-      const total = c.carrossel + c.estatico + c.video + c.email + c.artigo;
-      return `<tr><th scope="row"><a href="#m-${m}">${esc(mesLongo(m))}</a></th>${KINDS.map((k) => `<td>${c[k] || "–"}</td>`).join("")}<td class="t">${total}</td></tr>`;
-    })
-    .join("");
-
-  const sections = monthsDesc
-    .map((m) => {
-      const ps = byMonth.get(m)!;
-      const c = count(ps);
-      const chips = KINDS.filter((k) => c[k]).map((k) => `<span class="chip">${c[k]} ${esc(KIND_LABEL[k].toLowerCase())}</span>`).join("");
-      return `<section class="month" id="m-${m}" data-month="${m}">
-  <header><h3>${esc(mesLongo(m))}</h3><div class="chips">${chips}</div></header>
-  <div class="grid">${ps.map(card).join("")}</div>
-</section>`;
-    })
-    .join("");
-
-  const others = r.others.length
-    ? `<section class="others"><h3>Planejamento, roteiros e estratégia</h3><p class="lead">Entregas que não viram peça publicada, mas fazem parte do trabalho.</p><ul>${r.others
-        .map((o) => `<li><span>${esc(o.title)}</span><time>${esc(dataBr(o.date))}</time></li>`)
-        .join("")}</ul></section>`
-    : "";
-
-  const filterBtns = [`<button type="button" class="f on" data-k="all">Todas</button>`]
-    .concat(KINDS.filter((k) => tot[k]).map((k) => `<button type="button" class="f" data-k="${k}">${esc(KIND_LABEL[k])}</button>`))
-    .join("");
+  const data = {
+    nome: r.workspaceName || "Bagueira",
+    gerado: new Date(r.generatedAt).toLocaleString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      dateStyle: "long",
+      timeStyle: "short",
+    }),
+    hoje: new Date().toISOString().slice(0, 7),
+    kinds: KIND_LABEL,
+    status: STATUS_LABEL,
+    pecas: r.pieces
+      .filter((p) => p.month)
+      .map((p) => ({
+        k: p.kind,
+        t: p.title,
+        d: p.date,
+        m: p.month,
+        i: p.imageId ? `/relatorio/img/${p.imageId}?s=${sign("i", p.imageId)}` : "",
+        l: p.slides,
+        u: p.postUrl || "",
+        n: p.networks,
+        s: p.status,
+        ta: p.taskTitle,
+      })),
+    outras: r.others.map((o) => ({ t: o.title, d: o.date, m: o.month })),
+  };
 
   return `<!doctype html>
 <html lang="pt-BR">
@@ -161,165 +62,421 @@ export function renderReportPage(r: WorkspaceReport, opts: { refreshHref: string
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Relatório de entregas · ${esc(r.workspaceName || "Bagueira")}</title>
+<title>Relatório de Marketing · ${esc(data.nome)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,0..1,0&display=swap">
 <style>
-/* Layout: cabeçalho do site · resumo do período · gráfico mensal · tabela · galeria por mês · rodapé verde */
+/* Layout: barra do site · título + filtros fixos · números · gráfico mensal | redes e situação · galeria por mês · tabela · rodapé verde */
 :root{
-  --verde:#0f6b45; --verde-escuro:#0a3d29; --verde-claro:#e7f2ec;
-  --tinta:#16201b; --cinza:#5d6a63; --linha:#dfe6e2; --fundo:#f6f8f7; --branco:#ffffff;
-  --s-carrossel:#0f6b45; --s-estatico:#5aa37f; --s-video:#c9a227; --s-email:#2f5d8a; --s-artigo:#8a6f9e;
+  --verde:#0f6b45; --verde-escuro:#0a3d29; --verde-claro:#e7f2ec; --verde-linha:#c9e0d3;
+  --tinta:#16201b; --cinza:#5d6a63; --linha:#dfe6e2; --fundo:#f5f7f6; --branco:#ffffff;
+  --c-carrossel:#0f6b45; --c-estatico:#5aa37f; --c-video:#c9a227; --c-email:#2f5d8a; --c-artigo:#8a6f9e;
+  --st-publicada:#0f6b45; --st-agendada:#2f5d8a; --st-entregue:#8fb7a1; --st-producao:#c9a227;
   --font:"Heebo",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   color-scheme:light;
 }
 *{box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{margin:0;font-family:var(--font);color:var(--tinta);background:var(--branco);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+body{margin:0;font-family:var(--font);color:var(--tinta);background:var(--fundo);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
 img{max-width:100%;display:block}
 a{color:var(--verde)}
-.material-symbols-outlined{font-family:"Material Symbols Outlined";font-weight:normal;font-style:normal;font-size:20px;line-height:1;display:inline-block;letter-spacing:normal;text-transform:none;white-space:nowrap;direction:ltr;-webkit-font-feature-settings:"liga";font-feature-settings:"liga"}
-.wrap{max-width:1180px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
-.top{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--linha)}
-.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:14px}
-.top img{height:38px;width:auto}
-.top .tag{font-size:13px;color:var(--cinza);text-align:right}
-.top .tag b{color:var(--tinta);font-weight:600}
-.hero{background:linear-gradient(180deg,var(--verde-claro),var(--branco));padding-block:56px 40px}
-.eyebrow{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--verde)}
-h1{font-size:clamp(30px,4.4vw,48px);line-height:1.1;font-weight:800;letter-spacing:-.02em;margin:12px 0 12px;max-width:18ch;text-wrap:balance}
-.hero p.lead{color:var(--cinza);font-size:18px;max-width:60ch;margin:0}
-.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:32px}
-.kpi{background:var(--branco);border:1px solid var(--linha);border-radius:16px;padding:20px;display:grid;gap:2px}
-.kpi strong{font-size:40px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
-.kpi > span:last-child{color:var(--cinza);font-size:14px}
-.kpi .material-symbols-outlined{font-size:26px;margin-bottom:6px}
-.ic-carrossel{color:var(--s-carrossel)}.ic-estatico{color:var(--s-estatico)}.ic-video{color:var(--s-video)}.ic-email{color:var(--s-email)}
-.trust{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:20px;color:var(--cinza);font-size:14px}
-.trust span{display:inline-flex;align-items:center;gap:6px}
-.trust .material-symbols-outlined{color:var(--verde);font-size:18px}
-section.block{padding-block:48px 8px}
-h2{font-size:28px;font-weight:800;letter-spacing:-.01em;margin:0 0 6px}
-h2 + p{color:var(--cinza);margin:0 0 22px}
-.panel{border:1px solid var(--linha);border-radius:16px;padding:20px;background:var(--branco)}
-.legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;color:var(--cinza);margin-bottom:10px}
-.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
-.chart-wrap{overflow-x:auto}
-svg .g{stroke:var(--linha);stroke-width:1}
-svg .ax{fill:var(--cinza);font-size:11px;font-family:var(--font)}
-svg .tot{fill:var(--tinta);font-size:12px;font-weight:700;font-family:var(--font)}
-.s-carrossel{fill:var(--s-carrossel)}.s-estatico{fill:var(--s-estatico)}.s-video{fill:var(--s-video)}.s-email{fill:var(--s-email)}
-.table-wrap{overflow-x:auto;margin-top:20px}
-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:15px}
-th,td{padding:10px 12px;border-bottom:1px solid var(--linha);text-align:right;white-space:nowrap}
-th[scope=row],thead th:first-child{text-align:left}
-thead th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--cinza);font-weight:600}
-th[scope=row] a{color:var(--tinta);text-decoration:none;font-weight:600}
-th[scope=row] a:hover{color:var(--verde)}
-td.t{font-weight:700}
-.filters{position:sticky;top:67px;z-index:4;background:var(--branco);padding-block:12px;display:flex;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--linha)}
-.f{font:inherit;font-size:14px;border:1px solid var(--linha);background:var(--branco);color:var(--tinta);padding:8px 16px;border-radius:999px;cursor:pointer}
-.f:hover{border-color:var(--verde)}
-.f.on{background:var(--verde);border-color:var(--verde);color:#fff}
-.f:focus-visible,a:focus-visible{outline:3px solid var(--s-estatico);outline-offset:2px}
-.month{padding-block:28px 8px;border-bottom:1px solid var(--linha)}
-.month header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px;margin-bottom:18px}
-.month h3{font-size:22px;font-weight:700;margin:0}
-.chips{display:flex;flex-wrap:wrap;gap:6px}
-.chip{font-size:13px;background:var(--verde-claro);color:var(--verde-escuro);padding:3px 10px;border-radius:999px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:18px}
-.piece{border:1px solid var(--linha);border-radius:14px;overflow:hidden;background:var(--branco);display:flex;flex-direction:column;min-width:0}
-.thumb{position:relative;aspect-ratio:4/5;background:var(--fundo)}
-.thumb img{width:100%;height:100%;object-fit:cover}
-.ph{width:100%;height:100%;display:grid;place-items:center;color:var(--verde);background:var(--verde-claro)}
-.ph .material-symbols-outlined{font-size:44px;opacity:.7}
-.badge{position:absolute;left:10px;top:10px;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:4px 9px 4px 7px;border-radius:999px;background:rgba(255,255,255,.94);color:var(--tinta)}
-.badge .material-symbols-outlined{font-size:16px}
-.b-carrossel .material-symbols-outlined{color:var(--s-carrossel)}.b-estatico .material-symbols-outlined{color:var(--s-estatico)}.b-video .material-symbols-outlined{color:var(--s-video)}.b-email .material-symbols-outlined{color:var(--s-email)}.b-artigo .material-symbols-outlined{color:var(--s-artigo)}
-.pbody{padding:12px 14px 14px;display:flex;flex-direction:column;gap:4px;flex:1}
-.pbody h4{margin:0;font-size:14px;font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.meta{margin:0;font-size:12.5px;color:var(--cinza)}
-.post{margin-top:auto;padding-top:6px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:2px}
-.post .material-symbols-outlined{font-size:16px}
-.others{padding-block:40px 8px}
-.others h3{font-size:22px;margin:0 0 4px}
-.others .lead{color:var(--cinza);margin:0 0 14px}
-.others ul{list-style:none;margin:0;padding:0;columns:2 320px;column-gap:32px}
-.others li{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--linha);break-inside:avoid;font-size:15px}
-.others time{color:var(--cinza);font-size:13px;white-space:nowrap;font-variant-numeric:tabular-nums}
-footer{margin-top:56px;background:var(--verde-escuro);color:#d8e6de}
-footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:20px;padding-block:36px}
-footer img{height:34px;width:auto}
-footer p{margin:6px 0 0;font-size:14px;max-width:52ch}
-footer .upd{text-align:right;font-size:13px}
-footer a{color:#fff}
+button{font:inherit;color:inherit}
+.ms{font-family:"Material Symbols Outlined";font-weight:normal;font-style:normal;font-size:20px;line-height:1;display:inline-block;letter-spacing:normal;text-transform:none;white-space:nowrap;direction:ltr;font-feature-settings:"liga";-webkit-font-feature-settings:"liga";vertical-align:middle}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
 [hidden]{display:none!important}
-@media (max-width:760px){
+:focus-visible{outline:3px solid var(--c-estatico);outline-offset:2px}
+
+/* barra do site */
+.top{background:var(--branco);border-bottom:1px solid var(--linha)}
+.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:14px}
+.top img{height:36px;width:auto}
+.top .meta{font-size:13px;color:var(--cinza);text-align:right;line-height:1.35}
+.top .meta b{display:block;color:var(--tinta);font-weight:600;font-size:14px}
+.top .meta a{font-weight:600;text-decoration:none}
+
+/* título */
+.intro{background:linear-gradient(180deg,var(--verde-claro),var(--fundo));padding-block:36px 22px}
+.eyebrow{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--verde)}
+h1{font-size:clamp(28px,4vw,42px);line-height:1.1;font-weight:800;letter-spacing:-.02em;margin:10px 0 8px;text-wrap:balance}
+#resumo{color:var(--cinza);font-size:17px;max-width:70ch;margin:0}
+#resumo b{color:var(--tinta)}
+
+/* filtros */
+.filtros{position:sticky;top:0;z-index:10;background:rgba(245,247,246,.96);backdrop-filter:blur(8px);border-bottom:1px solid var(--linha)}
+.filtros .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding-block:12px}
+.grupo{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.grupo > .rot{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--cinza);margin-right:2px}
+.sep{width:1px;align-self:stretch;background:var(--linha)}
+select,input[type=search]{font:inherit;font-size:14px;border:1px solid var(--linha);background:var(--branco);border-radius:10px;padding:7px 10px;color:var(--tinta)}
+input[type=search]{min-width:0;width:200px}
+.chip{border:1px solid var(--linha);background:var(--branco);padding:6px 12px;border-radius:999px;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.chip:hover{border-color:var(--verde)}
+.chip[aria-pressed=true]{background:var(--verde);border-color:var(--verde);color:#fff}
+.chip .dot{width:9px;height:9px;border-radius:50%}
+.chip[aria-pressed=true] .dot{box-shadow:0 0 0 2px #fff}
+.limpar{border:0;background:none;color:var(--verde);font-weight:600;font-size:13.5px;cursor:pointer;padding:6px 4px}
+
+/* números */
+main{padding-block:22px 10px;display:grid;gap:22px}
+.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.kpi{background:var(--branco);border:1px solid var(--linha);border-radius:16px;padding:16px 16px 14px;text-align:left;cursor:pointer;display:grid;gap:2px;transition:border-color .15s}
+.kpi:hover{border-color:var(--verde)}
+.kpi[aria-pressed=true]{border-color:var(--verde);box-shadow:inset 0 0 0 1px var(--verde)}
+.kpi.total{background:var(--verde);border-color:var(--verde);color:#fff;cursor:default}
+.kpi .ms{font-size:24px;margin-bottom:4px}
+.kpi strong{font-size:34px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi span:last-child{font-size:13.5px;color:var(--cinza)}
+.kpi.total span:last-child{color:#d5eadf}
+
+/* painéis */
+.duo{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:22px}
+.painel{background:var(--branco);border:1px solid var(--linha);border-radius:16px;padding:18px 20px;min-width:0}
+.painel h2{font-size:18px;font-weight:700;margin:0 0 2px}
+.painel .sub{color:var(--cinza);font-size:13.5px;margin:0 0 12px}
+.legenda{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--cinza);margin-bottom:6px}
+.legenda i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.grafico{overflow-x:auto}
+.grafico svg{display:block}
+.grafico .g{stroke:var(--linha)}
+.grafico .ax{fill:var(--cinza);font-size:11px;font-family:var(--font)}
+.grafico .tot{fill:var(--tinta);font-size:11.5px;font-weight:700;font-family:var(--font)}
+.grafico .col{cursor:pointer}
+.grafico .col:hover .hl{fill:var(--verde-claro)}
+.grafico .col.sel .hl{fill:var(--verde-claro)}
+.barras{display:grid;gap:9px}
+.barra{display:grid;grid-template-columns:96px minmax(0,1fr) 40px;align-items:center;gap:10px;font-size:13.5px;background:none;border:0;padding:0;text-align:left;cursor:pointer}
+.barra .trilho{height:12px;border-radius:6px;background:var(--fundo);overflow:hidden}
+.barra .enche{height:100%;border-radius:6px;background:var(--verde)}
+.barra b{text-align:right;font-variant-numeric:tabular-nums}
+.barra[aria-pressed=true] span:first-child{font-weight:700;color:var(--verde)}
+.pilha{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--fundo);margin:6px 0 10px}
+.pilha span{height:100%}
+.st-lista{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}
+.vazio{color:var(--cinza);font-size:14px;padding:6px 0}
+
+/* galeria */
+.cab{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 14px}
+.cab h2{font-size:22px;font-weight:800;margin:0}
+.cab p{margin:0;color:var(--cinza);font-size:14px}
+.mes{display:grid;gap:12px}
+.mes header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;border-bottom:1px solid var(--linha);padding-bottom:8px}
+.mes h3{font-size:19px;font-weight:700;margin:0}
+.mes .cont{font-size:13px;color:var(--cinza)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}
+.card{background:var(--branco);border:1px solid var(--linha);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.thumb{position:relative;aspect-ratio:4/5;background:var(--verde-claro)}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.ph{position:absolute;inset:0;display:grid;place-items:center;color:var(--verde)}
+.ph .ms{font-size:42px;opacity:.65}
+.tipo{position:absolute;left:8px;top:8px;display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;padding:3px 8px 3px 6px;border-radius:999px;background:rgba(255,255,255,.95)}
+.tipo .ms{font-size:15px}
+.sit{position:absolute;right:8px;top:8px;font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;color:#fff}
+.corpo{padding:10px 12px 12px;display:flex;flex-direction:column;gap:3px;flex:1}
+.corpo h4{margin:0;font-size:13.5px;font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.corpo .info{margin:0;font-size:12px;color:var(--cinza)}
+.corpo a{margin-top:auto;padding-top:6px;font-size:12.5px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:2px}
+.corpo a .ms{font-size:15px}
+.mais{justify-self:center;border:1px solid var(--verde);color:var(--verde);background:var(--branco);border-radius:999px;padding:9px 20px;font-weight:600;cursor:pointer}
+
+/* tabela */
+details.painel summary{cursor:pointer;font-weight:700;font-size:16px}
+.tabela{overflow-x:auto;margin-top:12px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:14px}
+th,td{padding:9px 10px;border-bottom:1px solid var(--linha);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+thead th{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--cinza);font-weight:600}
+td.t{font-weight:700}
+.outras ul{list-style:none;margin:0;padding:0;columns:2 300px;column-gap:28px}
+.outras li{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--linha);break-inside:avoid;font-size:14px}
+.outras time{color:var(--cinza);font-size:12.5px;white-space:nowrap}
+
+footer{margin-top:36px;background:var(--verde-escuro);color:#d8e6de}
+footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:18px;padding-block:30px}
+footer img{height:32px;width:auto}
+footer p{margin:6px 0 0;font-size:13.5px}
+footer .dir{text-align:right;font-size:13px}
+footer a{color:#fff}
+
+@media (max-width:1000px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.duo{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:640px){
   .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .top .tag span{display:none}
-  .filters{top:62px}
-  footer .upd{text-align:left}
+  .sep{display:none}
+  input[type=search]{width:100%}
+  .grupo.busca{flex:1 1 100%}
+  .top .meta span{display:none}
+  footer .dir{text-align:left}
+  .filtros{position:static}
 }
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
 <div class="top"><div class="wrap">
   <img src="${LOGO_PRETO}" alt="Bagueira Seguros">
-  <div class="tag"><b>Relatório de entregas</b><span> · preparado por Arthur &amp; Vidal</span></div>
+  <div class="meta"><b>Relatório de marketing</b><span>Dados do eKyte · ${esc(data.gerado)} · </span><a href="${esc(opts.refreshHref)}">atualizar agora</a></div>
 </div></div>
 
-<header class="hero"><div class="wrap">
-  <span class="eyebrow"><span class="material-symbols-outlined">verified_user</span>Marketing Bagueira</span>
+<section class="intro"><div class="wrap">
+  <span class="eyebrow"><span class="ms">verified_user</span>Arthur &amp; Vidal para Bagueira Seguros</span>
   <h1>Tudo o que criamos para a Bagueira</h1>
-  <p class="lead">${pieces.length} peças entregues de ${esc(periodo)}, contadas a partir das publicações cadastradas no eKyte${publicadas ? `, ${publicadas} delas já publicadas nas redes` : ""}.</p>
-  <div class="kpis">${kpis}</div>
-  <div class="trust">
-    ${tot.artigo ? `<span><span class="material-symbols-outlined">article</span>${tot.artigo} conteúdos de blog e LinkedIn</span>` : ""}
-    ${r.others.length ? `<span><span class="material-symbols-outlined">history</span>${r.others.length} entregas de planejamento, roteiros e estratégia</span>` : ""}
-    <span><span class="material-symbols-outlined">calendar_month</span>${monthsAsc.length} meses de trabalho</span>
+  <p id="resumo"></p>
+</div></section>
+
+<div class="filtros"><div class="wrap">
+  <div class="grupo">
+    <span class="rot">Período</span>
+    <label class="sr" hidden for="de">De</label><select id="de" aria-label="De"></select>
+    <span>até</span>
+    <label class="sr" hidden for="ate">Até</label><select id="ate" aria-label="Até"></select>
+    <select id="atalho" aria-label="Atalhos de período">
+      <option value="">Atalhos…</option>
+      <option value="mes">Mês atual</option>
+      <option value="3">Últimos 3 meses</option>
+      <option value="6">Últimos 6 meses</option>
+      <option value="ano">Este ano</option>
+      <option value="tudo">Todo o período</option>
+    </select>
   </div>
-</div></header>
+  <span class="sep"></span>
+  <div class="grupo" id="f-rede"><span class="rot">Rede</span></div>
+  <span class="sep"></span>
+  <div class="grupo" id="f-sit"><span class="rot">Situação</span></div>
+  <span class="sep"></span>
+  <div class="grupo busca"><input id="busca" type="search" placeholder="Buscar peça ou tema" aria-label="Buscar"></div>
+  <button type="button" class="limpar" id="limpar">Limpar filtros</button>
+</div></div>
 
 <main class="wrap">
-  <section class="block">
-    <h2>Peças por mês</h2>
-    <p>Carrosséis, estáticos, vídeos e e-mails marketing de cada mês.</p>
-    <div class="panel">
-      <div class="legend"><span><i style="background:var(--s-carrossel)"></i>Carrossel</span><span><i style="background:var(--s-estatico)"></i>Estático</span><span><i style="background:var(--s-video)"></i>Vídeo</span><span><i style="background:var(--s-email)"></i>E-mail marketing</span></div>
-      ${chart(monthsAsc, byMonth)}
-      <div class="table-wrap"><table>
-        <thead><tr><th>Mês</th>${KINDS.map((k) => `<th>${esc(KIND_LABEL[k])}</th>`).join("")}<th>Total</th></tr></thead>
-        <tbody>${tableRows}</tbody>
-      </table></div>
-    </div>
+  <div class="kpis" id="kpis"></div>
+
+  <div class="duo">
+    <section class="painel">
+      <h2>Peças por mês</h2>
+      <p class="sub">Toque num mês para ver só ele.</p>
+      <div class="legenda" id="leg"></div>
+      <div class="grafico" id="grafico"></div>
+    </section>
+    <section class="painel">
+      <h2>Por rede social</h2>
+      <p class="sub">Peças que foram para cada canal. Toque para filtrar.</p>
+      <div class="barras" id="redes"></div>
+      <h2 style="margin-top:18px">Situação</h2>
+      <div class="pilha" id="pilha"></div>
+      <div class="st-lista" id="stl"></div>
+    </section>
+  </div>
+
+  <section class="mes-lista" style="display:grid;gap:22px">
+    <div class="cab"><h2>Galeria</h2><p id="gal-info"></p></div>
+    <div id="galeria" style="display:grid;gap:26px"></div>
   </section>
 
-  <section class="block" id="galeria">
-    <h2>Galeria de peças</h2>
-    <p>Do mês mais recente para o mais antigo. Filtre por formato.</p>
-    <div class="filters" role="group" aria-label="Filtrar por formato">${filterBtns}</div>
-    ${sections}
+  <details class="painel">
+    <summary>Tabela por mês</summary>
+    <div class="tabela"><table><thead id="th"></thead><tbody id="tb"></tbody></table></div>
+  </details>
+
+  <section class="painel outras" id="outras-box">
+    <h2>Planejamento, roteiros e estratégia</h2>
+    <p class="sub">Entregas do período que não viram peça publicada, mas fazem parte do trabalho.</p>
+    <ul id="outras"></ul>
   </section>
-  ${others}
 </main>
 
 <footer><div class="wrap">
   <div><img src="${LOGO_BRANCO}" alt="Bagueira Seguros"><p>Proteção e estratégia para o seu patrimônio financeiro.</p></div>
-  <div class="upd">Dados do eKyte, atualizados automaticamente.<br>Última leitura: ${esc(gerado)} · <a href="${esc(opts.refreshHref)}">atualizar agora</a></div>
+  <div class="dir">Relatório gerado a partir do eKyte e atualizado automaticamente.<br>Última leitura: ${esc(data.gerado)}</div>
 </div></footer>
 
+<script id="dados" type="application/json">${jsonForScript(data)}</script>
 <script>
 (function(){
-  var btns=document.querySelectorAll(".f");
-  btns.forEach(function(b){b.addEventListener("click",function(){
-    btns.forEach(function(x){x.classList.toggle("on",x===b)});
-    var k=b.getAttribute("data-k");
-    document.querySelectorAll(".piece").forEach(function(p){p.hidden=!(k==="all"||p.getAttribute("data-kind")===k)});
-    document.querySelectorAll(".month").forEach(function(m){m.hidden=!m.querySelector(".piece:not([hidden])")});
-  })});
+var D=JSON.parse(document.getElementById("dados").textContent);
+var P=(D.pecas||[]).map(function(p){p.n=Array.isArray(p.n)?p.n:[];p.t=p.t||"";p.ta=p.ta||"";p.s=p.s||"entregue";return p});
+var KINDS=["carrossel","estatico","video","email","artigo"];
+var PLURAL={carrossel:"Carrosséis",estatico:"Estáticos",video:"Vídeos",email:"E-mails marketing",artigo:"Blog e LinkedIn"};
+var ICON={carrossel:"view_carousel",estatico:"image",video:"smart_display",email:"mail",artigo:"article"};
+var COR={carrossel:"var(--c-carrossel)",estatico:"var(--c-estatico)",video:"var(--c-video)",email:"var(--c-email)",artigo:"var(--c-artigo)"};
+var STS=["publicada","agendada","entregue","producao"];
+var STCOR={publicada:"var(--st-publicada)",agendada:"var(--st-agendada)",entregue:"var(--st-entregue)",producao:"var(--st-producao)"};
+var MES=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+var MESL=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+function mc(m){var a=m.split("-");return MES[+a[1]-1]+"/"+a[0].slice(2)}
+function ml(m){var a=m.split("-");return MESL[+a[1]-1]+" de "+a[0]}
+function db(d){var a=d.split("-");return a.length===3?a[2]+"/"+a[1]+"/"+a[0]:""}
+function el(tag,attrs,html){var e=document.createElement(tag);if(attrs)for(var k in attrs){if(k==="text")e.textContent=attrs[k];else e.setAttribute(k,attrs[k])}if(html!=null)e.innerHTML=html;return e}
+function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+
+var meses=Array.from(new Set(P.map(function(p){return p.m}))).sort();
+var redes={};P.forEach(function(p){p.n.forEach(function(n){redes[n]=(redes[n]||0)+1})});
+var listaRedes=Object.keys(redes).sort(function(a,b){return redes[b]-redes[a]});
+
+var F={de:meses[0],ate:meses[meses.length-1],kinds:{},redes:{},sts:{},q:""};
+
+// ---- controles
+var de=document.getElementById("de"),ate=document.getElementById("ate");
+meses.forEach(function(m){de.appendChild(el("option",{value:m,text:mc(m)}));ate.appendChild(el("option",{value:m,text:mc(m)}))});
+de.value=F.de;ate.value=F.ate;
+de.onchange=function(){F.de=de.value;if(F.de>F.ate){F.ate=F.de;ate.value=F.ate}render()};
+ate.onchange=function(){F.ate=ate.value;if(F.ate<F.de){F.de=F.ate;de.value=F.de}render()};
+document.getElementById("atalho").onchange=function(){
+  var v=this.value,fim=meses[meses.length-1],hoje=D.hoje;this.value="";
+  var ultimo=meses.filter(function(m){return m<=hoje}).pop()||fim;
+  if(v==="mes"){F.de=F.ate=ultimo}
+  else if(v==="3"||v==="6"){var i=meses.indexOf(ultimo);F.ate=ultimo;F.de=meses[Math.max(0,i-(+v)+1)]}
+  else if(v==="ano"){var y=hoje.slice(0,4);var ms=meses.filter(function(m){return m.slice(0,4)===y});if(ms.length){F.de=ms[0];F.ate=ms[ms.length-1]}}
+  else if(v==="tudo"){F.de=meses[0];F.ate=fim}
+  de.value=F.de;ate.value=F.ate;render();
+};
+function chips(boxId,keys,label,store,dot){
+  var box=document.getElementById(boxId);
+  keys.forEach(function(k){
+    var b=el("button",{type:"button","class":"chip","aria-pressed":"false","data-k":k});
+    b.innerHTML=(dot?'<span class="dot" style="background:'+dot(k)+'"></span>':"")+esc(label(k));
+    b.onclick=function(){if(store[k])delete store[k];else store[k]=1;render()};
+    box.appendChild(b);
+  });
+}
+chips("f-rede",listaRedes,function(k){return k},F.redes);
+chips("f-sit",STS.filter(function(s){return P.some(function(p){return p.s===s})}),function(k){return D.status[k]},F.sts,function(k){return STCOR[k]});
+var busca=document.getElementById("busca"),tm;
+busca.oninput=function(){clearTimeout(tm);tm=setTimeout(function(){F.q=busca.value.trim().toLowerCase();render()},150)};
+document.getElementById("limpar").onclick=function(){F={de:meses[0],ate:meses[meses.length-1],kinds:{},redes:{},sts:{},q:""};de.value=F.de;ate.value=F.ate;busca.value="";render()};
+
+function vazio(o){for(var k in o)return false;return true}
+function filtra(ignorarKind){
+  return P.filter(function(p){
+    if(p.m<F.de||p.m>F.ate)return false;
+    if(!ignorarKind&&!vazio(F.kinds)&&!F.kinds[p.k])return false;
+    if(!vazio(F.redes)&&!p.n.some(function(n){return F.redes[n]}))return false;
+    if(!vazio(F.sts)&&!F.sts[p.s])return false;
+    if(F.q&&(p.t+" "+p.ta).toLowerCase().indexOf(F.q)<0)return false;
+    return true;
+  });
+}
+function conta(arr,key){var c={};arr.forEach(function(p){c[p[key]]=(c[p[key]]||0)+1});return c}
+
+// ---- números
+function kpis(base){
+  var c=conta(base,"k"),box=document.getElementById("kpis");box.innerHTML="";
+  var tot=filtra(false).length;
+  var t=el("div",{"class":"kpi total"});t.innerHTML='<span class="ms">inventory_2</span><strong>'+tot+'</strong><span>Peças no filtro</span>';box.appendChild(t);
+  KINDS.forEach(function(k){
+    var b=el("button",{type:"button","class":"kpi","aria-pressed":F.kinds[k]?"true":"false",title:"Filtrar "+PLURAL[k].toLowerCase()});
+    b.innerHTML='<span class="ms" style="color:'+COR[k]+'">'+ICON[k]+'</span><strong>'+(c[k]||0)+'</strong><span>'+PLURAL[k]+'</span>';
+    b.onclick=function(){if(F.kinds[k])delete F.kinds[k];else F.kinds[k]=1;render()};
+    box.appendChild(b);
+  });
+}
+
+// ---- gráfico
+function grafico(arr){
+  var ms=meses.filter(function(m){return m>=F.de&&m<=F.ate});
+  var box=document.getElementById("grafico");
+  if(!ms.length){box.innerHTML='<p class="vazio">Nenhum mês no período.</p>';return}
+  var por={};ms.forEach(function(m){por[m]={}});arr.forEach(function(p){if(por[p.m])por[p.m][p.k]=(por[p.m][p.k]||0)+1});
+  var tots=ms.map(function(m){var s=0;for(var k in por[m])s+=por[m][k];return s});
+  var max=Math.max(4,Math.max.apply(null,tots));
+  var step=max<=10?2:max<=25?5:max<=60?10:20,top=Math.ceil(max/step)*step;
+  var W=Math.max(520,ms.length*52+50),H=230,L=34,B=28,T=16,ph=H-B-T,cw=(W-L-8)/ms.length,bw=Math.min(28,cw*.62);
+  function y(v){return T+ph-(v/top)*ph}
+  var s='<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" role="img" aria-label="Peças por mês">';
+  for(var v=0;v<=top;v+=step)s+='<line class="g" x1="'+L+'" x2="'+(W-4)+'" y1="'+y(v)+'" y2="'+y(v)+'"/><text class="ax" x="'+(L-7)+'" y="'+(y(v)+4)+'" text-anchor="end">'+v+'</text>';
+  ms.forEach(function(m,i){
+    var cx=L+cw*(i+.5),acc=0,sel=F.de===m&&F.ate===m;
+    s+='<g class="col'+(sel?" sel":"")+'" data-m="'+m+'"><rect class="hl" x="'+(L+cw*i+2)+'" y="'+T+'" width="'+(cw-4)+'" height="'+ph+'" fill="transparent" rx="6"/>';
+    KINDS.forEach(function(k){var n=por[m][k]||0;if(!n)return;var y0=y(acc),y1=y(acc+n);s+='<rect x="'+(cx-bw/2)+'" y="'+y1+'" width="'+bw+'" height="'+Math.max(0,y0-y1-1.5)+'" fill="'+COR[k]+'"><title>'+mc(m)+" · "+PLURAL[k]+": "+n+'</title></rect>';acc+=n});
+    if(tots[i])s+='<text class="tot" x="'+cx+'" y="'+(y(tots[i])-5)+'" text-anchor="middle">'+tots[i]+'</text>';
+    s+='<text class="ax" x="'+cx+'" y="'+(H-9)+'" text-anchor="middle">'+mc(m)+'</text></g>';
+  });
+  box.innerHTML=s+'</svg>';
+  box.querySelectorAll(".col").forEach(function(g){g.onclick=function(){var m=g.getAttribute("data-m");if(F.de===m&&F.ate===m){F.de=meses[0];F.ate=meses[meses.length-1]}else{F.de=F.ate=m}de.value=F.de;ate.value=F.ate;render()}});
+}
+
+// ---- redes e situação
+function lados(arr){
+  var c={};arr.forEach(function(p){p.n.forEach(function(n){c[n]=(c[n]||0)+1})});
+  var box=document.getElementById("redes");box.innerHTML="";
+  var max=Math.max.apply(null,[1].concat(listaRedes.map(function(n){return c[n]||0})));
+  if(!listaRedes.length)box.innerHTML='<p class="vazio">As peças não têm rede cadastrada.</p>';
+  listaRedes.forEach(function(n){
+    var b=el("button",{type:"button","class":"barra","aria-pressed":F.redes[n]?"true":"false"});
+    b.innerHTML='<span>'+esc(n)+'</span><span class="trilho"><span class="enche" style="width:'+((c[n]||0)/max*100)+'%"></span></span><b>'+(c[n]||0)+'</b>';
+    b.onclick=function(){if(F.redes[n])delete F.redes[n];else F.redes[n]=1;render()};
+    box.appendChild(b);
+  });
+  var s=conta(arr,"s"),tot=arr.length||1,pilha=document.getElementById("pilha"),stl=document.getElementById("stl");pilha.innerHTML="";stl.innerHTML="";
+  STS.forEach(function(k){
+    if(!s[k])return;
+    pilha.appendChild(el("span",{style:"width:"+(s[k]/tot*100)+"%;background:"+STCOR[k],title:D.status[k]+": "+s[k]}));
+    stl.appendChild(el("div",null,'<span class="dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:'+STCOR[k]+'"></span>'+esc(D.status[k])+' <b style="float:right;font-variant-numeric:tabular-nums">'+s[k]+'</b>'));
+  });
+}
+
+// ---- galeria
+var LIM=60,limite=LIM;
+function card(p){
+  var img=p.i?'<img loading="lazy" src="'+p.i+'" alt="'+esc(p.t)+'">':'<div class="ph"><span class="ms">'+ICON[p.k]+'</span></div>';
+  var info=[db(p.d),p.k==="carrossel"&&p.l>1?p.l+" lâminas":"",p.n.join(", ")].filter(Boolean).join(" · ");
+  return '<article class="card"><div class="thumb">'+img+'<span class="tipo"><span class="ms" style="color:'+COR[p.k]+'">'+ICON[p.k]+'</span>'+esc(D.kinds[p.k])+'</span><span class="sit" style="background:'+STCOR[p.s]+'">'+esc(D.status[p.s])+'</span></div><div class="corpo"><h4>'+esc(p.t)+'</h4><p class="info">'+esc(info)+'</p>'+(p.u?'<a href="'+esc(p.u)+'" target="_blank" rel="noopener">Ver publicação <span class="ms">arrow_forward</span></a>':'')+'</div></article>';
+}
+function galeria(arr){
+  var box=document.getElementById("galeria");
+  var ord=arr.slice().sort(function(a,b){return b.d<a.d?-1:b.d>a.d?1:0});
+  var vis=ord.slice(0,limite),grupos={},ordem=[];
+  vis.forEach(function(p){if(!grupos[p.m]){grupos[p.m]=[];ordem.push(p.m)}grupos[p.m].push(p)});
+  var porMes=conta(arr,"m"),html="";
+  ordem.forEach(function(m){html+='<section class="mes"><header><h3>'+ml(m)+'</h3><span class="cont">'+porMes[m]+(porMes[m]===1?" peça":" peças")+'</span></header><div class="cards">'+grupos[m].map(card).join("")+'</div></section>'});
+  if(!arr.length)html='<p class="vazio">Nenhuma peça com esses filtros. Use “Limpar filtros” para ver tudo.</p>';
+  box.innerHTML=html;
+  if(ord.length>limite){var b=el("button",{type:"button","class":"mais"});b.textContent="Mostrar mais "+Math.min(LIM,ord.length-limite)+" de "+(ord.length-limite)+" restantes";b.onclick=function(){limite+=LIM;galeria(arr)};box.appendChild(b)}
+  document.getElementById("gal-info").textContent=arr.length?("Mostrando "+Math.min(limite,arr.length)+" de "+arr.length+", da mais recente para a mais antiga"):"";
+}
+
+// ---- tabela e outras entregas
+function tabela(arr){
+  document.getElementById("th").innerHTML="<tr><th>Mês</th>"+KINDS.map(function(k){return "<th>"+PLURAL[k]+"</th>"}).join("")+"<th>Total</th></tr>";
+  var ms=meses.filter(function(m){return m>=F.de&&m<=F.ate}).reverse(),por={};
+  arr.forEach(function(p){por[p.m]=por[p.m]||{};por[p.m][p.k]=(por[p.m][p.k]||0)+1});
+  var tot={},T=0;
+  document.getElementById("tb").innerHTML=ms.map(function(m){var r=por[m]||{},t=0;var tds=KINDS.map(function(k){var n=r[k]||0;t+=n;tot[k]=(tot[k]||0)+n;return "<td>"+(n||"–")+"</td>"}).join("");T+=t;return "<tr><td>"+ml(m)+"</td>"+tds+'<td class="t">'+t+"</td></tr>"}).join("")+
+    '<tr><td><b>Total</b></td>'+KINDS.map(function(k){return "<td><b>"+(tot[k]||0)+"</b></td>"}).join("")+'<td class="t">'+T+"</td></tr>";
+}
+function outras(){
+  var lst=D.outras.filter(function(o){return o.m>=F.de&&o.m<=F.ate&&(!F.q||o.t.toLowerCase().indexOf(F.q)>=0)});
+  document.getElementById("outras-box").hidden=!lst.length;
+  document.getElementById("outras").innerHTML=lst.map(function(o){return "<li><span>"+esc(o.t)+"</span><time>"+db(o.d)+"</time></li>"}).join("");
+  return lst.length;
+}
+
+function resumo(arr,nOutras){
+  var periodo=F.de===F.ate?ml(F.de).toLowerCase():ml(F.de).toLowerCase()+" a "+ml(F.ate).toLowerCase();
+  var pub=arr.filter(function(p){return p.s==="publicada"}).length;
+  var txt="<b>"+arr.length+(arr.length===1?" peça":" peças")+"</b> de "+periodo+(pub?", <b>"+pub+"</b> "+(pub===1?"já publicada":"já publicadas")+" nas redes":"");
+  if(nOutras)txt+=", além de "+nOutras+(nOutras===1?" entrega":" entregas")+" de planejamento e roteiros";
+  var ativos=[];
+  KINDS.forEach(function(k){if(F.kinds[k])ativos.push(PLURAL[k].toLowerCase())});
+  Object.keys(F.redes).forEach(function(n){ativos.push(n)});
+  Object.keys(F.sts).forEach(function(s){ativos.push(D.status[s].toLowerCase())});
+  if(F.q)ativos.push("“"+F.q+"”");
+  document.getElementById("resumo").innerHTML=txt+"."+(ativos.length?" Filtro: "+esc(ativos.join(", "))+".":"");
+}
+
+function sync(){
+  document.querySelectorAll("#f-rede .chip").forEach(function(b){b.setAttribute("aria-pressed",F.redes[b.getAttribute("data-k")]?"true":"false")});
+  document.querySelectorAll("#f-sit .chip").forEach(function(b){b.setAttribute("aria-pressed",F.sts[b.getAttribute("data-k")]?"true":"false")});
+}
+var leg=document.getElementById("leg");
+KINDS.forEach(function(k){if(P.some(function(p){return p.k===k}))leg.appendChild(el("span",null,'<i style="background:'+COR[k]+'"></i>'+esc(D.kinds[k])))});
+
+function render(){
+  limite=LIM;sync();
+  var semKind=filtra(true),arr=filtra(false);
+  kpis(semKind);grafico(arr);lados(arr);galeria(arr);tabela(arr);
+  resumo(arr,outras());
+}
+render();
 })();
 </script>
 </body>

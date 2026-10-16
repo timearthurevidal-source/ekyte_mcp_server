@@ -36,6 +36,24 @@ export interface Piece {
   approved: boolean;
   published: boolean;
   postUrl: string | null;
+  networks: string[];      // Instagram, Facebook, TikTok, LinkedIn…
+  status: PieceStatus;
+}
+
+export type PieceStatus = "publicada" | "agendada" | "entregue" | "producao";
+
+export const STATUS_LABEL: Record<PieceStatus, string> = {
+  publicada: "Publicada",
+  agendada: "Agendada",
+  entregue: "Entregue",
+  producao: "Em produção",
+};
+
+function pieceStatus(published: boolean, date: string, taskSituation: unknown): PieceStatus {
+  if (published) return "publicada";
+  const today = new Date().toISOString().slice(0, 10);
+  if (date && date > today) return "agendada";
+  return taskSituation === 30 ? "entregue" : "producao";
 }
 
 export interface OtherDelivery {
@@ -143,6 +161,15 @@ export function formToPiece(f: Record<string, any>, task: Record<string, any>): 
   const values = parseValues(f.values);
   const images = Array.isArray(values["2"]) ? values["2"] : [];
   const tags: any[] = Array.isArray(f.tags) ? f.tags : [];
+  const published = Boolean(postUrl) || channels.some((c) => c?.status === 3);
+  const networks = [
+    ...new Set(
+      [
+        ...channels.map((c) => c?.channel?.media?.name),
+        ...(Array.isArray(f.selectedFormMedias) ? f.selectedFormMedias.map((m: any) => m?.name) : []),
+      ].filter((n): n is string => typeof n === "string" && n.length > 0)
+    ),
+  ];
   const date =
     pubDates.sort()[0] ??
     day(f.placementStartDate) ??
@@ -162,19 +189,27 @@ export function formToPiece(f: Record<string, any>, task: Record<string, any>): 
     imageId: typeof f.thumbnailId === "number" && !VIDEO_EXT.test(`${f.thumbnail?.name ?? ""}`) ? f.thumbnailId : null,
     slides: images.length,
     approved: tags.some((t) => /aprovad/i.test(`${t?.name ?? ""}`)),
-    published: Boolean(postUrl) || channels.some((c) => c?.status === 3),
+    published,
     postUrl,
+    networks,
+    status: pieceStatus(published, date, task.situation),
   };
 }
 
-/** Monta o relatório de um workspace (tarefas concluídas). */
+/** Monta o relatório de um workspace: tarefas concluídas, ativas e pausadas (canceladas ficam de fora). */
 export async function buildWorkspaceReport(workspaceId: number): Promise<WorkspaceReport> {
-  const tasks = await apiGet<Record<string, any>[]>(companyV2Url("ctc-tasks"), {
-    limit: 2000,
-    workspaceId,
-    situation: 30,
-  });
-  const list = Array.isArray(tasks) ? tasks : [];
+  const bySituation = await Promise.all(
+    [30, 10, 20].map(async (situation) => {
+      const data = await apiGet<Record<string, any>[]>(companyV2Url("ctc-tasks"), {
+        limit: 2000,
+        workspaceId,
+        situation,
+      });
+      return (Array.isArray(data) ? data : []).map((t): Record<string, any> => ({ ...t, situation }));
+    })
+  );
+  const seen = new Set<number>();
+  const list = bySituation.flat().filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)));
 
   const pieces: Piece[] = [];
   const others: OtherDelivery[] = [];
@@ -189,7 +224,7 @@ export async function buildWorkspaceReport(workspaceId: number): Promise<Workspa
       console.error(`[report] forms ${task.id}:`, e instanceof Error ? e.message : e);
     }
     const type = `${task.ctcTaskType?.name ?? ""}`;
-    const date = day(task.resolvedDate) ?? day(task.currentDueDate) ?? "";
+    const date = (task.situation === 30 ? day(task.resolvedDate) : null) ?? day(task.currentDueDate) ?? day(task.resolvedDate) ?? "";
     const deliverable = forms.filter((f) => !isWorkingForm(f));
     if (deliverable.length) {
       for (const f of deliverable) pieces.push(formToPiece(f, task));
@@ -197,7 +232,7 @@ export async function buildWorkspaceReport(workspaceId: number): Promise<Workspa
     }
     if (forms.length) {
       // só roteiros/pautas cadastrados: entrega de conteúdo sem peça final
-      others.push({ taskId: task.id, title: clean(task.title, 120), taskType: type, date, month: date.slice(0, 7) });
+      if (task.situation === 30) others.push({ taskId: task.id, title: clean(task.title, 120), taskType: type, date, month: date.slice(0, 7) });
       return;
     }
     const kind = classifyTaskWithoutForms(`${task.title ?? ""}`, type);
@@ -217,8 +252,10 @@ export async function buildWorkspaceReport(workspaceId: number): Promise<Workspa
         approved: false,
         published: false,
         postUrl: null,
+        networks: [],
+        status: pieceStatus(false, date, task.situation),
       });
-    } else {
+    } else if (task.situation === 30) {
       others.push({ taskId: task.id, title: clean(task.title, 120), taskType: type, date, month: date.slice(0, 7) });
     }
   });
