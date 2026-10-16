@@ -1,16 +1,19 @@
 /**
- * Painel dinâmico de entregas — visual inspirado em bagueiraseguros.com.br
- * (logo oficial do site, Heebo, verde institucional, cards e ícones Material).
+ * Painel dinâmico de entregas — logos, cores, fonte e frases vêm da marca do
+ * workspace (src/report/brands.ts); sem marca configurada, visual neutro.
  *
  * O servidor embute os dados (lidos ao vivo do eKyte) e o navegador recalcula
  * totais, gráfico, redes, situação e galeria a cada filtro.
- * Para ajustar a cor da marca, mude só --verde e --verde-escuro abaixo.
+ * Para ajustar a marca de um cliente, edite src/report/brands.ts.
  */
 
 import { KIND_LABEL, STATUS_LABEL, WorkspaceReport, sign } from "../services/publications.js";
+import { Brand, brandFor } from "./brands.js";
 
-const LOGO_PRETO = "https://bagueiraseguros.com.br/05bagueira_horizontal_preto.webp?v=20260622-8";
-const LOGO_BRANCO = "https://bagueiraseguros.com.br/03bagueira_horizontal_branco.webp?v=20260622-8";
+/** Logo da marca ou, sem logo, o nome em texto. */
+function logo(url: string | undefined, b: Brand, cls: string): string {
+  return url ? `<img src="${esc(url)}" alt="${esc(b.nomeCompleto)}">` : `<span class="${cls}">${esc(b.nomeCompleto)}</span>`;
+}
 
 function esc(s: unknown): string {
   return String(s ?? "")
@@ -29,8 +32,11 @@ function jsonForScript(v: unknown): string {
 }
 
 export function renderReportPage(r: WorkspaceReport, opts: { refreshHref: string }): string {
+  const b = brandFor(r.workspaceId, r.workspaceName);
+  const c = b.cores;
+  const fontStack = `"${b.fonte}",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif`;
   const data = {
-    nome: r.workspaceName || "Bagueira",
+    nome: r.workspaceName || b.nomeCompleto,
     gerado: new Date(r.generatedAt).toLocaleString("pt-BR", {
       timeZone: "America/Sao_Paulo",
       dateStyle: "long",
@@ -66,16 +72,16 @@ export function renderReportPage(r: WorkspaceReport, opts: { refreshHref: string
 <title>Relatório de Marketing · ${esc(data.nome)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap">
+${b.fonteUrl ? `<link rel="stylesheet" href="${b.fonteUrl}">` : ""}
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,0..1,0&display=swap">
 <style>
 /* Layout: barra do site · título + filtros fixos · números · gráfico mensal | redes e situação · galeria por mês · tabela · rodapé verde */
 :root{
-  --verde:#0f6b45; --verde-escuro:#0a3d29; --verde-claro:#e7f2ec; --verde-linha:#c9e0d3;
-  --tinta:#16201b; --cinza:#5d6a63; --linha:#dfe6e2; --fundo:#f5f7f6; --branco:#ffffff;
-  --c-carrossel:#0f6b45; --c-estatico:#5aa37f; --c-video:#c9a227; --c-email:#2f5d8a; --c-artigo:#8a6f9e;
-  --st-publicada:#0f6b45; --st-agendada:#2f5d8a; --st-entregue:#8fb7a1; --st-producao:#c9a227;
-  --font:"Heebo",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --verde:${c.marca}; --verde-escuro:${c.marcaEscura}; --verde-claro:${c.marcaClara}; --verde-linha:${c.marcaLinha};
+  --tinta:${c.tinta}; --cinza:${c.cinza}; --linha:${c.linha}; --fundo:${c.fundo}; --branco:#ffffff;
+  --c-carrossel:${c.carrossel}; --c-estatico:${c.estatico}; --c-video:${c.video}; --c-email:${c.email}; --c-artigo:${c.artigo};
+  --st-publicada:${c.publicada}; --st-agendada:${c.agendada}; --st-entregue:${c.entregue}; --st-producao:${c.producao};
+  --font:${fontStack};
   color-scheme:light;
 }
 *{box-sizing:border-box}
@@ -104,7 +110,7 @@ h1{font-size:clamp(28px,4vw,42px);line-height:1.1;font-weight:800;letter-spacing
 #resumo b{color:var(--tinta)}
 
 /* filtros */
-.filtros{position:sticky;top:0;z-index:10;background:rgba(245,247,246,.96);backdrop-filter:blur(8px);border-bottom:1px solid var(--linha)}
+.filtros{position:sticky;top:0;z-index:10;background:${c.filtrosFundo};backdrop-filter:blur(8px);border-bottom:1px solid var(--linha)}
 .filtros .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding-block:12px}
 .grupo{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .grupo > .rot{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--cinza);margin-right:2px}
@@ -128,7 +134,7 @@ main{padding-block:22px 10px;display:grid;gap:22px}
 .kpi .ms{font-size:24px;margin-bottom:4px}
 .kpi strong{font-size:34px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
 .kpi span:last-child{font-size:13.5px;color:var(--cinza)}
-.kpi.total span:last-child{color:#d5eadf}
+.kpi.total span:last-child{color:${c.totalLegenda}}
 
 /* painéis */
 .duo{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:22px}
@@ -194,13 +200,13 @@ td.t{font-weight:700}
 .outras li{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--linha);break-inside:avoid;font-size:14px}
 .outras time{color:var(--cinza);font-size:12.5px;white-space:nowrap}
 
-footer{margin-top:36px;background:var(--verde-escuro);color:#d8e6de}
+footer{margin-top:36px;background:var(--verde-escuro);color:${c.rodapeTexto}}
 footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:18px;padding-block:30px}
 footer img{height:32px;width:auto}
 footer p{margin:6px 0 0;font-size:13.5px}
 footer .dir{text-align:right;font-size:13px}
 footer a{color:#fff}
-
+${b.logoClara && b.logoEscura ? "" : ".marca-txt{font-weight:800;font-size:20px;letter-spacing:-.01em;color:var(--tinta)}\nfooter .marca-txt{color:#fff}\n"}
 @media (max-width:1000px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.duo{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:640px){
   .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -216,13 +222,13 @@ footer a{color:#fff}
 </head>
 <body>
 <div class="top"><div class="wrap">
-  <img src="${LOGO_PRETO}" alt="Bagueira Seguros">
+  ${logo(b.logoClara, b, "marca-txt")}
   <div class="meta"><b>Relatório de marketing</b><span>Dados do eKyte · ${esc(data.gerado)} · </span><a href="${esc(opts.refreshHref)}">atualizar agora</a></div>
 </div></div>
 
 <section class="intro"><div class="wrap">
-  <span class="eyebrow"><span class="ms">verified_user</span>Arthur &amp; Vidal para Bagueira Seguros</span>
-  <h1>Tudo o que criamos para a Bagueira</h1>
+  <span class="eyebrow"><span class="ms">${esc(b.icone)}</span>Arthur &amp; Vidal para ${esc(b.nomeCompleto)}</span>
+  <h1>${esc(b.titulo)}</h1>
   <p id="resumo"></p>
 </div></section>
 
@@ -288,7 +294,7 @@ footer a{color:#fff}
 </main>
 
 <footer><div class="wrap">
-  <div><img src="${LOGO_BRANCO}" alt="Bagueira Seguros"><p>Proteção e estratégia para o seu patrimônio financeiro.</p></div>
+  <div>${logo(b.logoEscura, b, "marca-txt")}<p>${esc(b.assinatura)}</p></div>
   <div class="dir">Relatório gerado a partir do eKyte e atualizado automaticamente.<br>Última leitura: ${esc(data.gerado)}</div>
 </div></footer>
 
