@@ -45,6 +45,8 @@ export interface Brand {
   logoEscura?: string;
   /** Altura das logos em px (padrão: 36 no topo, 32 no rodapé). Útil para logo quadrada. */
   logoAltura?: { topo: number; rodape: number };
+  /** Filtro CSS na logo do topo (ex.: escurecer uma logo clara para usar no fundo claro). */
+  logoTopoFiltro?: string;
   /** Ícone Material Symbols ao lado de "Arthur & Vidal para …". */
   icone: string;
   /** Nome da fonte (família CSS) e link do Google Fonts. */
@@ -132,7 +134,31 @@ const TALST: Brand = {
   },
 };
 
+const HASSIF_DELFINO: Brand = {
+  nomeCurto: "a Hassif & Delfino",
+  nomeCompleto: "Hassif & Delfino Estratégias Patrimoniais",
+  titulo: "Tudo o que criamos para a Hassif & Delfino",
+  assinatura: "Seu patrimônio merece uma estratégia.",
+  // Logo do próprio site (versão clara). No topo, fundo claro, ela é escurecida por filtro.
+  logoClara: "https://hassifedelfino.com.br/assets/logo-claro.png",
+  logoEscura: "https://hassifedelfino.com.br/assets/logo-claro.png",
+  logoTopoFiltro: "brightness(0) saturate(100%)",
+  logoAltura: { topo: 40, rodape: 40 },
+  icone: "account_balance",
+  fonte: "Heebo",
+  fonteUrl: HEEBO,
+  // Cor do site (theme-color): verde-petróleo #02292F. Demais tons são variações dela.
+  cores: {
+    marca: "#02292f", marcaEscura: "#011a1e", marcaClara: "#e6eeef", marcaLinha: "#c3d4d6",
+    tinta: "#0f1c1e", cinza: "#55666a", linha: "#dde5e6", fundo: "#f5f7f7",
+    filtrosFundo: "rgba(245,247,247,.96)", totalLegenda: "#c3d4d6", rodapeTexto: "#c3d4d6",
+    carrossel: "#02292f", estatico: "#5e8a90", video: "#2c6670", email: "#9ab0b3", artigo: "#55666a",
+    publicada: "#02292f", agendada: "#2c6670", entregue: "#8fadb1", producao: "#c3d4d6",
+  },
+};
+
 export const BRANDS: Record<number, Brand> = {
+  113924: HASSIF_DELFINO,
   113920: BAGUEIRA,
   113919: AUGUSTO_ESTEVES,
   113926: TALST,
