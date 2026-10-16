@@ -25,6 +25,7 @@ import type { Request, Response, NextFunction } from "express";
 import { registerReadTools } from "./tools/read-tools.js";
 import { registerWriteTools } from "./tools/write-tools.js";
 import { registerReportTools } from "./tools/report-tools.js";
+import { registerReportRoutes } from "./report/routes.js";
 
 // ============ Global error handlers (prevent silent crash) ============
 
@@ -93,6 +94,9 @@ async function runHTTP(): Promise<void> {
   app.get("/health", (_req: Request, res: Response) => {
     res.json({ status: "ok", server: "ekyte-mcp-server", version: "1.0.0" });
   });
+
+  // Relatório de entregas (página + miniaturas, links assinados)
+  registerReportRoutes(app);
 
   // MCP endpoint — stateless mode: new server + transport per request
   app.post("/mcp", async (req: Request, res: Response) => {

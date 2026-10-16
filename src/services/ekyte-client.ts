@@ -57,6 +57,11 @@ function getClient(): AxiosInstance {
   return client;
 }
 
+/** Cliente axios autenticado, para chamadas que precisam de opções próprias (ex.: download binário). */
+export function getRawClient(): AxiosInstance {
+  return getClient();
+}
+
 // ============ Error Handling ============
 
 export function handleApiError(error: unknown): string {

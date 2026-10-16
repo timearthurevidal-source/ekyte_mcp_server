@@ -11,6 +11,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { apiGet, companyV2Url, getCompanyId, handleApiError } from "../services/ekyte-client.js";
 import { CHARACTER_LIMIT } from "../constants.js";
+import { fetchTaskForms, formToPiece, getWorkspaceReport, sign } from "../services/publications.js";
+import { reportLink } from "../report/routes.js";
 
 function stripHtml(html: string | null | undefined): string {
   if (!html) return "";
@@ -145,6 +147,101 @@ Máximo de 60 tarefas por chamada.`,
         text = text.slice(0, CHARACTER_LIMIT) + "…[truncado — peça menos tarefas por vez]";
       }
       return { content: [{ type: "text" as const, text }] };
+    }
+  );
+
+  // -------- Publicações (peças) de várias tarefas --------
+  server.registerTool(
+    "ekyte_task_publications",
+    {
+      title: "Peças (publicações) de várias tarefas",
+      description: `Lista as peças cadastradas como publicações dentro de cada tarefa, em formato compacto:
+formato do Ekyte (Post Único, Carrossel, Reels…), tipo classificado (carrossel, estatico, video, email, artigo),
+título, data de veiculação, mês, ID da imagem de capa, nº de lâminas, aprovado/publicado e link do post.
+
+É a fonte certa para contar peças: o briefing e o campo quantidade costumam vir vazios ou com o texto padrão.
+Máximo de 30 tarefas por chamada.`,
+      inputSchema: {
+        task_ids: z.array(z.number().int().positive()).min(1).max(30)
+          .describe("IDs das tarefas (use ekyte_list_tasks para descobrir)."),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async ({ task_ids }) => {
+      const results = await mapLimit(task_ids, 4, async (id) => {
+        try {
+          const [task, forms] = await Promise.all([
+            apiGet<Record<string, any>>(companyV2Url(`ctc-tasks/${id}`)),
+            fetchTaskForms(id),
+          ]);
+          return {
+            task_id: id,
+            title: task.title,
+            type: task.ctcTaskType?.name,
+            resolved: task.resolvedDate?.split("T")[0] ?? null,
+            pieces: forms.map((f) => {
+              const p = formToPiece(f, task);
+              return {
+                form_id: p.formId, format: p.format, kind: p.kind, title: p.title, date: p.date,
+                image_id: p.imageId, slides: p.slides, approved: p.approved, published: p.published, post_url: p.postUrl,
+              };
+            }),
+          };
+        } catch (error) {
+          return { task_id: id, error: handleApiError(error) };
+        }
+      });
+      let text = JSON.stringify(results);
+      if (text.length > CHARACTER_LIMIT) {
+        text = text.slice(0, CHARACTER_LIMIT) + "…[truncado — peça menos tarefas por vez]";
+      }
+      return { content: [{ type: "text" as const, text }] };
+    }
+  );
+
+  // -------- Relatório de entregas de um workspace --------
+  server.registerTool(
+    "ekyte_delivery_report",
+    {
+      title: "Relatório de entregas de um workspace (contagem por mês + link)",
+      description: `Monta o relatório de entregas de um workspace a partir das tarefas concluídas:
+conta carrosséis, estáticos, vídeos, e-mails marketing e blog/LinkedIn por mês e devolve o link
+da página do relatório (visual do cliente, com imagens), hospedada neste servidor e atualizada sozinha.
+
+refresh=true força uma nova leitura do eKyte (senão usa o cache de até 6 horas).`,
+      inputSchema: {
+        workspace_id: z.number().int().positive().describe("ID do workspace (ex.: 113920 = Bagueira Corretora)."),
+        refresh: z.boolean().default(false).describe("Forçar nova leitura do eKyte."),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async ({ workspace_id, refresh }) => {
+      try {
+        const r = await getWorkspaceReport(workspace_id, refresh);
+        const months: Record<string, Record<string, number>> = {};
+        for (const p of r.pieces) {
+          const m = p.month || "sem-data";
+          months[m] ??= { carrossel: 0, estatico: 0, video: 0, email: 0, artigo: 0 };
+          months[m][p.kind]++;
+        }
+        const totals = { carrossel: 0, estatico: 0, video: 0, email: 0, artigo: 0 } as Record<string, number>;
+        for (const p of r.pieces) totals[p.kind]++;
+        const domain = process.env.PUBLIC_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "");
+        const out = {
+          workspace: r.workspaceName,
+          generated_at: r.generatedAt,
+          tasks_scanned: r.tasksScanned,
+          pieces_total: r.pieces.length,
+          totals,
+          by_month: Object.fromEntries(Object.entries(months).sort(([a], [b]) => a.localeCompare(b))),
+          pieces_without_image: r.pieces.filter((p) => !p.imageId).length,
+          other_deliveries: r.others.map((o) => `${o.date} · ${o.title}`),
+          report_url: domain ? reportLink(domain, workspace_id) : `(defina PUBLIC_URL) /relatorio/${workspace_id}?s=${sign("r", workspace_id)}`,
+        };
+        return { content: [{ type: "text" as const, text: JSON.stringify(out, null, 1) }] };
+      } catch (error) {
+        return { content: [{ type: "text" as const, text: handleApiError(error) }] };
+      }
     }
   );
 }
