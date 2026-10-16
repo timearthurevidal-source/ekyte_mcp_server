@@ -116,6 +116,8 @@ export function classifyForm(f: Record<string, any>, taskType: string): PieceKin
   // "Post Único: Story, Reel, Short, TikTok" serve para story em imagem E para vídeo:
   // sem arquivo de vídeo, é estático; sem nenhuma capa, vale o nome do formato.
   if (/v[ií]deo|video|youtube/.test(name)) return "video";
+  // Capa de vídeo feita pela equipe é arte, não vídeo (ex.: "Capa video Augusto Tik Tok").
+  if (/^\s*capa\b/i.test(`${f.formName ?? ""}`)) return "estatico";
   if (/reel|tiktok|short/.test(name) && !f.thumbnailId) return "video";
   if (/blog|artigo|linkedin/.test(name) && !f.thumbnailId) return "artigo";
   if (/e-?mail/i.test(taskType)) return "email";
