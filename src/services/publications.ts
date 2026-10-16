@@ -95,17 +95,56 @@ function parseValues(v: unknown): Record<string, any> {
   }
 }
 
+/** Hassif & Delfino: regras de contagem só deste workspace (ver ajustarPecasHassif). */
+const HASSIF_DELFINO = new Set<number>([113924]);
+
+const DIA_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Hassif & Delfino:
+ * - publicação não publicada repetida (mesmo título de uma publicada na mesma tarefa) sai;
+ * - não publicada em tarefa ativa/pausada conta no mês do prazo da tarefa;
+ * - não publicada em tarefa concluída com data mais de 45 dias antes da conclusão
+ *   (data de veiculação que ficou no padrão) conta no mês da conclusão.
+ */
+export function ajustarPecasHassif(pieces: Piece[], task: Record<string, any>): Piece[] {
+  const chave = (t: string) => t.replace(/\.{3}|…/g, "").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 40);
+  const publicadas = new Set(pieces.filter((p) => p.published).map((p) => chave(p.title)));
+  const resolvida = day(task.resolvedDate);
+  const prazo = day(task.currentDueDate);
+  return pieces
+    .filter((p) => p.published || !publicadas.has(chave(p.title)))
+    .map((p) => {
+      if (p.published) return p;
+      let date = p.date;
+      if (task.situation === 30) {
+        if (resolvida && date && Date.parse(resolvida) - Date.parse(date) > 45 * DIA_MS) date = resolvida;
+      } else if (prazo) {
+        date = prazo;
+      }
+      if (date === p.date) return p;
+      return { ...p, date, month: date.slice(0, 7), status: pieceStatus(false, date, task.situation) };
+    });
+}
+
 const VIDEO_EXT = /\.(mp4|mov|m4v|webm|avi)$/i;
 
 /** Publicações que são etapa de produção (roteiro, pauta), não peça entregue. */
-export function isWorkingForm(f: Record<string, any>): boolean {
+export function isWorkingForm(f: Record<string, any>, workspaceId = 0): boolean {
   const name = `${f.form?.name ?? ""}`.toLowerCase();
-  return /roteiro|pauta|briefing|copy only/.test(name);
+  if (/roteiro|pauta|briefing|copy only/.test(name)) return true;
+  if (HASSIF_DELFINO.has(workspaceId)) {
+    // Hassif & Delfino: texto do site não é peça; roteiro cadastrado no formato de Reel também não.
+    if (/copy de site/.test(name)) return true;
+    if (/^\s*roteiro\b/i.test(`${f.formName ?? ""}`)) return true;
+  }
+  return false;
 }
 
 /** Classifica uma publicação do Ekyte. */
 /** Workspaces em que o formato "Linkedln" (texto, sem imagem) conta como Blog/LinkedIn. Talst. */
-const LINKEDLN_COMO_ARTIGO = new Set<number>([113926]);
+/** Hassif & Delfino também: os "Linkedln" de lá são artigos (texto longo) da tarefa "Blog e LinkedIn". */
+const LINKEDLN_COMO_ARTIGO = new Set<number>([113926, 113924]);
 
 export function classifyForm(f: Record<string, any>, taskType: string, taskTitle = "", workspaceId = 0): PieceKind {
   const name = `${f.form?.name ?? ""}`.toLowerCase();
@@ -237,9 +276,11 @@ export async function buildWorkspaceReport(workspaceId: number): Promise<Workspa
     }
     const type = `${task.ctcTaskType?.name ?? ""}`;
     const date = (task.situation === 30 ? day(task.resolvedDate) : null) ?? day(task.currentDueDate) ?? day(task.resolvedDate) ?? "";
-    const deliverable = forms.filter((f) => !isWorkingForm(f));
+    const deliverable = forms.filter((f) => !isWorkingForm(f, workspaceId));
     if (deliverable.length) {
-      for (const f of deliverable) pieces.push(formToPiece(f, task));
+      let taskPieces = deliverable.map((f) => formToPiece(f, task));
+      if (HASSIF_DELFINO.has(workspaceId)) taskPieces = ajustarPecasHassif(taskPieces, task);
+      pieces.push(...taskPieces);
       return;
     }
     if (forms.length) {

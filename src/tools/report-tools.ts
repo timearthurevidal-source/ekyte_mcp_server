@@ -179,7 +179,7 @@ Máximo de 30 tarefas por chamada.`,
             title: task.title,
             type: task.ctcTaskType?.name,
             resolved: task.resolvedDate?.split("T")[0] ?? null,
-            pieces: forms.filter((f) => !isWorkingForm(f)).map((f) => {
+            pieces: forms.filter((f) => !isWorkingForm(f, Number(task.workspaceId ?? task.workspace?.id ?? 0))).map((f) => {
               const p = formToPiece(f, task);
               return {
                 form_id: p.formId, format: p.format, kind: p.kind, title: p.title, date: p.date,
