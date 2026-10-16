@@ -108,9 +108,30 @@ const AUGUSTO_ESTEVES: Brand = {
   },
 };
 
+const TALST: Brand = {
+  nomeCurto: "a Talst",
+  nomeCompleto: "Talst Contabilidade",
+  titulo: "Tudo o que criamos para a Talst",
+  assinatura: "Contabilidade, estratégia e gestão para o seu negócio.",
+  // Nova ID (Manual de Marca): ainda sem logo em PNG no relatório, aparece o nome em Heebo.
+  icone: "account_balance",
+  fonte: "Heebo",
+  fonteUrl: HEEBO,
+  // Paleta do Manual de Marca: ouro #CD9C42, grafite #111315, cinza #A7ADB5, branco.
+  // Grafite como cor principal (o ouro com texto branco fica sem contraste); o ouro é o destaque.
+  cores: {
+    marca: "#111315", marcaEscura: "#111315", marcaClara: "#f7f0e2", marcaLinha: "#ead8b4",
+    tinta: "#111315", cinza: "#5b6067", linha: "#e3e5e8", fundo: "#f7f7f5",
+    filtrosFundo: "rgba(247,247,245,.96)", totalLegenda: "#e3c88f", rodapeTexto: "#a7adb5",
+    carrossel: "#cd9c42", estatico: "#2b2f34", video: "#8c6a28", email: "#a7adb5", artigo: "#6b7179",
+    publicada: "#111315", agendada: "#cd9c42", entregue: "#a7adb5", producao: "#e3c88f",
+  },
+};
+
 export const BRANDS: Record<number, Brand> = {
   113920: BAGUEIRA,
   113919: AUGUSTO_ESTEVES,
+  113926: TALST,
 };
 
 export function brandFor(workspaceId: number, workspaceName: string): Brand {

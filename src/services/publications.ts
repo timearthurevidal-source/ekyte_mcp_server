@@ -104,7 +104,7 @@ export function isWorkingForm(f: Record<string, any>): boolean {
 }
 
 /** Classifica uma publicação do Ekyte. */
-export function classifyForm(f: Record<string, any>, taskType: string): PieceKind {
+export function classifyForm(f: Record<string, any>, taskType: string, taskTitle = ""): PieceKind {
   const name = `${f.form?.name ?? ""}`.toLowerCase();
   const channels: any[] = Array.isArray(f.ctcTaskFormChannel) ? f.ctcTaskFormChannel : [];
   const thumb = `${f.thumbnail?.name ?? ""}`;
@@ -113,13 +113,17 @@ export function classifyForm(f: Record<string, any>, taskType: string): PieceKin
   if (/e-?mail/.test(name)) return "email";
   if (/carross/.test(name) || f.form?.formType === 50) return "carrossel";
   if (hasVideoFile) return "video";
+  // Thumbnail de YouTube ("Tamb TalstCast…") cadastrada no formato "Post Vídeo: YouTube":
+  // sem arquivo de vídeo, a peça entregue é a arte da capa, não o vídeo.
+  if (/youtube/.test(name) && /\b(tamb|thumb|thumbnail|miniatura)\b/i.test(taskTitle)) return "estatico";
   // "Post Único: Story, Reel, Short, TikTok" serve para story em imagem E para vídeo:
   // sem arquivo de vídeo, é estático; sem nenhuma capa, vale o nome do formato.
   if (/v[ií]deo|video|youtube/.test(name)) return "video";
   // Capa de vídeo feita pela equipe é arte, não vídeo (ex.: "Capa video Augusto Tik Tok").
   if (/^\s*capa\b/i.test(`${f.formName ?? ""}`)) return "estatico";
   if (/reel|tiktok|short/.test(name) && !f.thumbnailId) return "video";
-  if (/blog|artigo|linkedin/.test(name) && !f.thumbnailId) return "artigo";
+  // "Linkedln" (com L minúsculo no lugar do i) é como o formato aparece em alguns workspaces.
+  if (/blog|artigo|linkedin|linkedln/.test(name) && !f.thumbnailId) return "artigo";
   if (/e-?mail/i.test(taskType)) return "email";
   return "estatico";
 }
@@ -185,7 +189,7 @@ export function formToPiece(f: Record<string, any>, task: Record<string, any>): 
     taskType,
     formId: f.id ?? null,
     format: `${f.form?.name ?? ""}`,
-    kind: classifyForm(f, taskType),
+    kind: classifyForm(f, taskType, `${task.title ?? ""}`),
     title: clean(f.formName || f.description || task.title),
     date,
     month: date.slice(0, 7),
