@@ -110,7 +110,8 @@ const DIA_MS = 24 * 60 * 60 * 1000;
 export function ajustarPecasHassif(pieces: Piece[], task: Record<string, any>): Piece[] {
   const chave = (t: string) => t.replace(/\.{3}|…/g, "").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 40);
   const publicadas = new Set(pieces.filter((p) => p.published).map((p) => chave(p.title)));
-  const resolvida = day(task.resolvedDate);
+  // A listagem de tarefas não traz resolvedDate; sem ele, vale o prazo da tarefa.
+  const resolvida = day(task.resolvedDate) ?? day(task.currentDueDate);
   const prazo = day(task.currentDueDate);
   return pieces
     .filter((p) => p.published || !publicadas.has(chave(p.title)))
