@@ -54,6 +54,7 @@ export function renderReportPage(r: WorkspaceReport, opts: { refreshHref: string
         m: p.month,
         i: p.imageId ? `/relatorio/img/${p.imageId}?s=${sign("i", p.imageId)}` : "",
         v: p.videoId ? `/relatorio/vthumb/${p.videoId}?s=${sign("v", p.videoId)}` : "",
+        vp: p.videoId ? `/relatorio/video/${p.videoId}?s=${sign("v", p.videoId)}` : "",
         l: p.slides,
         u: p.postUrl || "",
         n: p.networks,
@@ -174,7 +175,9 @@ main{padding-block:22px 10px;display:grid;gap:22px}
 .card{background:var(--branco);border:1px solid var(--linha);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;min-width:0}
 .thumb{position:relative;aspect-ratio:4/5;background:var(--verde-claro)}
 .thumb img{position:relative;width:100%;height:100%;object-fit:cover}
-.play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:46px;height:46px;border-radius:50%;background:rgba(10,61,41,.72);color:#fff;display:grid;place-items:center;pointer-events:none}
+.assistir .thumb{cursor:pointer}
+.assistir .thumb:hover .play{background:var(--verde);transform:translate(-50%,-50%) scale(1.08)}
+.play{transition:transform .15s,background .15s;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:46px;height:46px;border-radius:50%;background:rgba(10,61,41,.72);color:#fff;display:grid;place-items:center;pointer-events:none}
 .play .ms{font-size:30px}
 .ph{position:absolute;inset:0;display:grid;place-items:center;color:var(--verde)}
 .ph .ms{font-size:42px;opacity:.65}
@@ -200,6 +203,13 @@ td.t{font-weight:700}
 .outras li{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--linha);break-inside:avoid;font-size:14px}
 .outras time{color:var(--cinza);font-size:12.5px;white-space:nowrap}
 
+#player{position:fixed;inset:0;z-index:50;background:rgba(8,20,14,.82);display:grid;place-items:center;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+#player .caixa{width:min(440px,100%);display:grid;gap:10px}
+#player video{width:100%;max-height:78vh;border-radius:14px;background:#000}
+#player .barra-p{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#fff;font-size:14px}
+#player .barra-p span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#player button{border:0;background:rgba(255,255,255,.14);color:#fff;border-radius:999px;width:38px;height:38px;cursor:pointer;flex:none}
+#player .erro{color:#fff;background:rgba(255,255,255,.1);border-radius:12px;padding:14px;font-size:14px}
 footer{margin-top:36px;background:var(--verde-escuro);color:${c.rodapeTexto}}
 footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:18px;padding-block:30px}
 footer img{height:32px;width:auto}
@@ -297,6 +307,12 @@ ${b.logoClara && b.logoEscura ? "" : ".marca-txt{font-weight:800;font-size:20px;
   <div>${logo(b.logoEscura, b, "marca-txt")}<p>${esc(b.assinatura)}</p></div>
   <div class="dir">Relatório gerado a partir do eKyte e atualizado automaticamente.<br>Última leitura: ${esc(data.gerado)}</div>
 </div></footer>
+
+<div id="player" hidden role="dialog" aria-modal="true" aria-label="Vídeo"><div class="caixa">
+  <div class="barra-p"><span id="player-t"></span><button type="button" id="player-x" aria-label="Fechar"><span class="ms">close</span></button></div>
+  <video id="player-v" controls playsinline preload="metadata"></video>
+  <p class="erro" id="player-e" hidden>Não consegui carregar este vídeo agora. Tente de novo em instantes ou abra pelo link da publicação.</p>
+</div></div>
 
 <script id="dados" type="application/json">${jsonForScript(data)}</script>
 <script>
@@ -431,7 +447,8 @@ function card(p){
     :p.v?ph+'<img loading="lazy" src="'+p.v+'" alt="'+esc(p.t)+'" onerror="this.remove()"><span class="play"><span class="ms">play_arrow</span></span>'
     :ph;
   var info=[db(p.d),p.k==="carrossel"&&p.l>1?p.l+" lâminas":"",p.n.join(", ")].filter(Boolean).join(" · ");
-  return '<article class="card"><div class="thumb">'+img+'<span class="tipo"><span class="ms" style="color:'+COR[p.k]+'">'+ICON[p.k]+'</span>'+esc(D.kinds[p.k])+'</span><span class="sit" style="background:'+STCOR[p.s]+'">'+esc(D.status[p.s])+'</span></div><div class="corpo"><h4>'+esc(p.t)+'</h4><p class="info">'+esc(info)+'</p>'+(p.u?'<a href="'+esc(p.u)+'" target="_blank" rel="noopener">Ver publicação <span class="ms">arrow_forward</span></a>':'')+'</div></article>';
+  var abre=p.vp?' role="button" tabindex="0" data-vp="'+esc(p.vp)+'" data-t="'+esc(p.t)+'" aria-label="Assistir: '+esc(p.t)+'"':'';
+  return '<article class="card'+(p.vp?' assistir':'')+'"><div class="thumb"'+abre+'>'+img+'<span class="tipo"><span class="ms" style="color:'+COR[p.k]+'">'+ICON[p.k]+'</span>'+esc(D.kinds[p.k])+'</span><span class="sit" style="background:'+STCOR[p.s]+'">'+esc(D.status[p.s])+'</span></div><div class="corpo"><h4>'+esc(p.t)+'</h4><p class="info">'+esc(info)+'</p>'+(p.u?'<a href="'+esc(p.u)+'" target="_blank" rel="noopener">Ver publicação <span class="ms">arrow_forward</span></a>':'')+'</div></article>';
 }
 function galeria(arr){
   var box=document.getElementById("galeria");
@@ -488,6 +505,16 @@ function render(){
   kpis(semKind);grafico(arr);lados(arr);galeria(arr);tabela(arr);
   resumo(arr,outras());
 }
+var pl=document.getElementById("player"),pv=document.getElementById("player-v"),pe=document.getElementById("player-e"),pt=document.getElementById("player-t");
+function abrir(url,titulo){pe.hidden=true;pv.hidden=false;pt.textContent=titulo||"";pv.src=url;pl.hidden=false;document.body.style.overflow="hidden";var pr=pv.play();if(pr&&pr.catch)pr.catch(function(){});document.getElementById("player-x").focus()}
+function fechar(){pv.pause();pv.removeAttribute("src");pv.load();pl.hidden=true;document.body.style.overflow=""}
+pv.addEventListener("error",function(){if(pl.hidden)return;pv.hidden=true;pe.hidden=false});
+document.getElementById("player-x").onclick=fechar;
+pl.addEventListener("click",function(e){if(e.target===pl)fechar()});
+document.addEventListener("keydown",function(e){if(e.key==="Escape"&&!pl.hidden)fechar()});
+var gal=document.getElementById("galeria");
+gal.addEventListener("click",function(e){var t=e.target.closest&&e.target.closest("[data-vp]");if(t)abrir(t.getAttribute("data-vp"),t.getAttribute("data-t"))});
+gal.addEventListener("keydown",function(e){if(e.key!=="Enter"&&e.key!==" ")return;var t=e.target.closest&&e.target.closest("[data-vp]");if(t){e.preventDefault();abrir(t.getAttribute("data-vp"),t.getAttribute("data-t"))}});
 render();
 })();
 </script>

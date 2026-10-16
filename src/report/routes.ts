@@ -12,6 +12,7 @@
 import type { Express, Request, Response } from "express";
 import { spawn } from "node:child_process";
 import { downloadArtifact, getWorkspaceReport, sign, verify, videoSource } from "../services/publications.js";
+import { companyUrl, getRawClient } from "../services/ekyte-client.js";
 import { renderReportPage } from "./page.js";
 
 type Resizer = (buf: Buffer) => Promise<Buffer>;
@@ -162,6 +163,44 @@ export function registerReportRoutes(app: Express): void {
       console.error(`[report] vthumb ${id}:`, e instanceof Error ? e.message : e);
       res.setHeader("Cache-Control", "no-store");
       res.status(502).end();
+    }
+  });
+
+  // Vídeo para tocar no relatório: redireciona para o link temporário do armazenamento
+  // quando o eKyte oferece um (não passa tráfego pela Railway); senão, repassa com suporte a Range.
+  app.get("/relatorio/video/:id", async (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0 || !verify("v", id, req.query.s)) {
+      res.status(404).end();
+      return;
+    }
+    try {
+      const src = await videoSource(id);
+      if (!src.headers) {
+        res.setHeader("Cache-Control", "no-store");
+        res.redirect(302, src.url);
+        return;
+      }
+      const range = typeof req.headers.range === "string" ? req.headers.range : undefined;
+      const up = await getRawClient().get(companyUrl(`artifacts/${id}/download`), {
+        responseType: "stream",
+        headers: range ? { Range: range } : {},
+        validateStatus: (s) => s >= 200 && s < 300,
+        timeout: 0,
+      });
+      res.status(up.status);
+      for (const h of ["content-type", "content-length", "content-range", "accept-ranges", "last-modified", "etag"]) {
+        const v = up.headers[h];
+        if (v) res.setHeader(h, String(v));
+      }
+      if (!up.headers["accept-ranges"]) res.setHeader("Accept-Ranges", "bytes");
+      res.setHeader("Cache-Control", "private, max-age=3600");
+      const stream = up.data as NodeJS.ReadableStream & { destroy: () => void };
+      req.on("close", () => stream.destroy());
+      stream.pipe(res);
+    } catch (e) {
+      console.error(`[report] video ${id}:`, e instanceof Error ? e.message : e);
+      if (!res.headersSent) res.status(502).end();
     }
   });
 
