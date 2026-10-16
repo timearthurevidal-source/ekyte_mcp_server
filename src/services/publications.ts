@@ -78,16 +78,26 @@ function parseValues(v: unknown): Record<string, any> {
 
 const VIDEO_EXT = /\.(mp4|mov|m4v|webm|avi)$/i;
 
+/** Publicações que são etapa de produção (roteiro, pauta), não peça entregue. */
+export function isWorkingForm(f: Record<string, any>): boolean {
+  const name = `${f.form?.name ?? ""}`.toLowerCase();
+  return /roteiro|pauta|briefing|copy only/.test(name);
+}
+
 /** Classifica uma publicação do Ekyte. */
 export function classifyForm(f: Record<string, any>, taskType: string): PieceKind {
   const name = `${f.form?.name ?? ""}`.toLowerCase();
   const channels: any[] = Array.isArray(f.ctcTaskFormChannel) ? f.ctcTaskFormChannel : [];
   const thumb = `${f.thumbnail?.name ?? ""}`;
+  const hasVideoFile = VIDEO_EXT.test(thumb) || channels.some((c) => c?.isVideo === 1);
 
   if (/e-?mail/.test(name)) return "email";
   if (/carross/.test(name) || f.form?.formType === 50) return "carrossel";
-  if (/reels|v[ií]deo|video|tiktok|shorts|youtube/.test(name)) return "video";
-  if (channels.some((c) => c?.isVideo === 1) || VIDEO_EXT.test(thumb)) return "video";
+  if (hasVideoFile) return "video";
+  // "Post Único: Story, Reel, Short, TikTok" serve para story em imagem E para vídeo:
+  // sem arquivo de vídeo, é estático; sem nenhuma capa, vale o nome do formato.
+  if (/v[ií]deo|video|youtube/.test(name)) return "video";
+  if (/reel|tiktok|short/.test(name) && !f.thumbnailId) return "video";
   if (/blog|artigo|linkedin/.test(name) && !f.thumbnailId) return "artigo";
   if (/e-?mail/i.test(taskType)) return "email";
   return "estatico";
@@ -149,7 +159,7 @@ export function formToPiece(f: Record<string, any>, task: Record<string, any>): 
     title: clean(f.formName || f.description || task.title),
     date,
     month: date.slice(0, 7),
-    imageId: typeof f.thumbnailId === "number" ? f.thumbnailId : null,
+    imageId: typeof f.thumbnailId === "number" && !VIDEO_EXT.test(`${f.thumbnail?.name ?? ""}`) ? f.thumbnailId : null,
     slides: images.length,
     approved: tags.some((t) => /aprovad/i.test(`${t?.name ?? ""}`)),
     published: Boolean(postUrl) || channels.some((c) => c?.status === 3),
@@ -180,8 +190,14 @@ export async function buildWorkspaceReport(workspaceId: number): Promise<Workspa
     }
     const type = `${task.ctcTaskType?.name ?? ""}`;
     const date = day(task.resolvedDate) ?? day(task.currentDueDate) ?? "";
+    const deliverable = forms.filter((f) => !isWorkingForm(f));
+    if (deliverable.length) {
+      for (const f of deliverable) pieces.push(formToPiece(f, task));
+      return;
+    }
     if (forms.length) {
-      for (const f of forms) pieces.push(formToPiece(f, task));
+      // só roteiros/pautas cadastrados: entrega de conteúdo sem peça final
+      others.push({ taskId: task.id, title: clean(task.title, 120), taskType: type, date, month: date.slice(0, 7) });
       return;
     }
     const kind = classifyTaskWithoutForms(`${task.title ?? ""}`, type);

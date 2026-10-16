@@ -11,7 +11,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { apiGet, companyV2Url, getCompanyId, handleApiError } from "../services/ekyte-client.js";
 import { CHARACTER_LIMIT } from "../constants.js";
-import { fetchTaskForms, formToPiece, getWorkspaceReport, sign } from "../services/publications.js";
+import { fetchTaskForms, formToPiece, getWorkspaceReport, isWorkingForm, sign } from "../services/publications.js";
 import { reportLink } from "../report/routes.js";
 
 function stripHtml(html: string | null | undefined): string {
@@ -179,7 +179,7 @@ Máximo de 30 tarefas por chamada.`,
             title: task.title,
             type: task.ctcTaskType?.name,
             resolved: task.resolvedDate?.split("T")[0] ?? null,
-            pieces: forms.map((f) => {
+            pieces: forms.filter((f) => !isWorkingForm(f)).map((f) => {
               const p = formToPiece(f, task);
               return {
                 form_id: p.formId, format: p.format, kind: p.kind, title: p.title, date: p.date,

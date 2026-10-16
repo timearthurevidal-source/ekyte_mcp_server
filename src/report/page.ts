@@ -146,7 +146,7 @@ export function renderReportPage(r: WorkspaceReport, opts: { refreshHref: string
     .join("");
 
   const others = r.others.length
-    ? `<section class="others"><h3>Planejamento e estratégia</h3><p class="lead">Entregas que não geram peça publicada, mas fazem parte do trabalho.</p><ul>${r.others
+    ? `<section class="others"><h3>Planejamento, roteiros e estratégia</h3><p class="lead">Entregas que não viram peça publicada, mas fazem parte do trabalho.</p><ul>${r.others
         .map((o) => `<li><span>${esc(o.title)}</span><time>${esc(dataBr(o.date))}</time></li>`)
         .join("")}</ul></section>`
     : "";
@@ -278,7 +278,7 @@ footer a{color:#fff}
   <div class="kpis">${kpis}</div>
   <div class="trust">
     ${tot.artigo ? `<span><span class="material-symbols-outlined">article</span>${tot.artigo} conteúdos de blog e LinkedIn</span>` : ""}
-    ${r.others.length ? `<span><span class="material-symbols-outlined">history</span>${r.others.length} entregas de planejamento e estratégia</span>` : ""}
+    ${r.others.length ? `<span><span class="material-symbols-outlined">history</span>${r.others.length} entregas de planejamento, roteiros e estratégia</span>` : ""}
     <span><span class="material-symbols-outlined">calendar_month</span>${monthsAsc.length} meses de trabalho</span>
   </div>
 </div></header>
