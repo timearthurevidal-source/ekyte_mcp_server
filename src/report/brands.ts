@@ -54,6 +54,7 @@ export interface Brand {
 }
 
 import { AUGUSTO_LOGO_ESCURA_PARA_FUNDO_CLARO, AUGUSTO_LOGO_GELO_PARA_FUNDO_ESCURO } from "./logos-augusto.js";
+import { TALST_LOGO_BRANCA, TALST_LOGO_PRETA } from "./logos-talst.js";
 
 const HEEBO = "https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap";
 
@@ -113,7 +114,10 @@ const TALST: Brand = {
   nomeCompleto: "Talst Contabilidade",
   titulo: "Tudo o que criamos para a Talst",
   assinatura: "Contabilidade, estratégia e gestão para o seu negócio.",
-  // Nova ID (Manual de Marca): ainda sem logo em PNG no relatório, aparece o nome em Heebo.
+  // Logo da nova ID: preta no topo, branca no rodapé grafite.
+  logoClara: TALST_LOGO_PRETA,
+  logoEscura: TALST_LOGO_BRANCA,
+  logoAltura: { topo: 34, rodape: 38 },
   icone: "account_balance",
   fonte: "Heebo",
   fonteUrl: HEEBO,
