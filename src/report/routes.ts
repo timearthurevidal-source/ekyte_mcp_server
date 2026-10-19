@@ -204,6 +204,47 @@ export function registerReportRoutes(app: Express): void {
     }
   });
 
+  // Checagem dos vídeos de um workspace (mesma assinatura do relatório). Devolve JSON.
+  app.get("/relatorio/:ws/diag-video", async (req: Request, res: Response) => {
+    const ws = Number(req.params.ws);
+    if (!Number.isInteger(ws) || ws <= 0 || !verify("r", ws, req.query.s)) {
+      res.status(404).end();
+      return;
+    }
+    const report = await getWorkspaceReport(ws);
+    const vids = report.pieces.filter((p) => p.videoId).slice(0, 4);
+    const out: any[] = [];
+    for (const p of vids) {
+      const id = p.videoId as number;
+      const r: any = { id, titulo: p.title };
+      try {
+        const src = await videoSource(id);
+        r.fonte = src.headers ? "proxy (sem redirecionamento)" : `redireciona para ${new URL(src.url).host}`;
+      } catch (e: any) {
+        r.fonte_erro = `${e?.response?.status ?? ""} ${e?.message ?? e}`.trim();
+      }
+      try {
+        const t0 = Date.now();
+        const t = await videoThumb(id);
+        r.capa = `ok ${t.type} ${t.buf.length}B em ${Date.now() - t0}ms`;
+      } catch (e: any) {
+        r.capa_erro = `${e?.message ?? e}`.slice(0, 400);
+      }
+      try {
+        const up = await getRawClient().get(companyUrl(`artifacts/${id}/download`), {
+          responseType: "stream", headers: { Range: "bytes=0-1023" }, maxRedirects: 5,
+          validateStatus: () => true, timeout: 20000,
+        });
+        (up.data as any)?.destroy?.();
+        r.download = `${up.status} ${up.headers["content-type"] ?? ""} ${up.headers["content-range"] ?? up.headers["content-length"] ?? ""}`.trim();
+      } catch (e: any) {
+        r.download_erro = `${e?.message ?? e}`;
+      }
+      out.push(r);
+    }
+    res.json({ workspace: report.workspaceName, videos_com_arquivo: report.pieces.filter((p) => p.videoId).length, testes: out });
+  });
+
   app.get("/relatorio/:ws", async (req: Request, res: Response) => {
     const ws = Number(req.params.ws);
     if (!Number.isInteger(ws) || ws <= 0 || !verify("r", ws, req.query.s)) {
