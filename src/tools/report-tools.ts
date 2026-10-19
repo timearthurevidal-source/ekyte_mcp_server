@@ -65,6 +65,18 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
   return out;
 }
 
+/** Nomes de arquivos anexados dentro dos campos do formulário (diagnóstico). */
+function arquivosNoForm(f: Record<string, any>): string[] {
+  try {
+    const form = JSON.parse(`${f.values ?? "{}"}`)?.form ?? {};
+    const out: string[] = [];
+    for (const v of Object.values(form)) if (Array.isArray(v)) for (const a of v) if (a?.name) out.push(`${a.id}:${a.name}`);
+    return out.slice(0, 12);
+  } catch {
+    return [];
+  }
+}
+
 export function registerReportTools(server: McpServer): void {
   // -------- GET genérico (somente leitura) --------
   server.registerTool(
@@ -183,7 +195,9 @@ Máximo de 30 tarefas por chamada.`,
               const p = formToPiece(f, task);
               return {
                 form_id: p.formId, format: p.format, kind: p.kind, title: p.title, date: p.date,
-                image_id: p.imageId, slides: p.slides, approved: p.approved, published: p.published, post_url: p.postUrl,
+                image_id: p.imageId, video_id: p.videoId, slides: p.slides,
+                capa: `${f.thumbnail?.name ?? ""}` || null,
+                arquivos_no_form: arquivosNoForm(f), approved: p.approved, published: p.published, post_url: p.postUrl,
               };
             }),
           };
