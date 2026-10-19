@@ -446,7 +446,7 @@ function lados(arr){
 var LIM=60,limite=LIM;
 function card(p){
   var ph='<div class="ph"><span class="ms">'+ICON[p.k]+'</span></div>';
-  var img=p.i?'<img loading="lazy" src="'+p.i+'" alt="'+esc(p.t)+'">'
+  var img=p.i?'<img loading="lazy" src="'+p.i+'" alt="'+esc(p.t)+'">'+(p.vp?'<span class="play"><span class="ms">play_arrow</span></span>':'')
     :p.v?ph+'<img loading="lazy" src="'+p.v+'" alt="'+esc(p.t)+'" onerror="this.remove()"><span class="play"><span class="ms">play_arrow</span></span>'
     :ph;
   var info=[db(p.d),p.k==="carrossel"&&p.l>1?p.l+" lâminas":"",p.n.join(", ")].filter(Boolean).join(" · ");

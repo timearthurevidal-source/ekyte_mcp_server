@@ -212,7 +212,8 @@ export function registerReportRoutes(app: Express): void {
       return;
     }
     const report = await getWorkspaceReport(ws);
-    const vids = report.pieces.filter((p) => p.videoId).slice(0, 4);
+    const todos = report.pieces.filter((p) => p.videoId);
+    const vids = [...todos.slice(0, 2), ...todos.slice(-3)];
     const out: any[] = [];
     for (const p of vids) {
       const id = p.videoId as number;
@@ -237,6 +238,26 @@ export function registerReportRoutes(app: Express): void {
         });
         (up.data as any)?.destroy?.();
         r.download = `${up.status} ${up.headers["content-type"] ?? ""} ${up.headers["content-range"] ?? up.headers["content-length"] ?? ""}`.trim();
+        // Ordem dos blocos no início do arquivo: "moov" antes de "mdat" = toca logo (faststart).
+        const head = await getRawClient().get<ArrayBuffer>(companyUrl(`artifacts/${id}/download`), {
+          responseType: "arraybuffer", headers: { Range: "bytes=0-65535" }, maxRedirects: 5, timeout: 20000,
+        });
+        const txt = Buffer.from(head.data).toString("latin1");
+        const moov = txt.indexOf("moov"), mdat = txt.indexOf("mdat");
+        r.faststart = moov >= 0 && (mdat < 0 || moov < mdat) ? "sim (índice no começo)" : "não (índice no fim do arquivo)";
+        const src2 = await videoSource(id);
+        r.codec = await new Promise<string>((resolve) => {
+          const args = ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name,profile,pix_fmt,width,height,bit_rate", "-of", "compact=p=0:nk=0"];
+          if (src2.headers) args.push("-headers", src2.headers);
+          args.push(src2.url);
+          const pr = spawn("ffprobe", args, { stdio: ["ignore", "pipe", "pipe"] });
+          let o = "";
+          const tm = setTimeout(() => pr.kill("SIGKILL"), 30000);
+          pr.stdout.on("data", (c: Buffer) => { o += c.toString(); });
+          pr.stderr.on("data", (c: Buffer) => { o += c.toString(); });
+          pr.on("close", () => { clearTimeout(tm); resolve(o.trim().slice(0, 300)); });
+          pr.on("error", (e) => { clearTimeout(tm); resolve(`ffprobe: ${e.message}`); });
+        });
       } catch (e: any) {
         r.download_erro = `${e?.message ?? e}`;
       }

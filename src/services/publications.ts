@@ -204,6 +204,17 @@ export async function fetchTaskForms(taskId: number): Promise<Record<string, any
   return Array.isArray(data) ? (data as Record<string, any>[]) : [];
 }
 
+const IMAGE_EXT = /\.(png|jpe?g|webp)$/i;
+
+/** Primeira imagem anexada nos campos do formulário (capa enviada junto com o vídeo). */
+function capaNoFormulario(f: Record<string, any>): number | null {
+  for (const v of Object.values(parseValues(f.values))) {
+    if (!Array.isArray(v)) continue;
+    for (const a of v) if (typeof a?.id === "number" && IMAGE_EXT.test(`${a?.name ?? ""}`)) return a.id;
+  }
+  return null;
+}
+
 export function formToPiece(f: Record<string, any>, task: Record<string, any>): Piece {
   const taskType = `${task.ctcTaskType?.name ?? task.task_type ?? ""}`;
   const channels: any[] = Array.isArray(f.ctcTaskFormChannel) ? f.ctcTaskFormChannel : [];
@@ -237,7 +248,13 @@ export function formToPiece(f: Record<string, any>, task: Record<string, any>): 
     title: clean(f.formName || f.description || task.title),
     date,
     month: date.slice(0, 7),
-    imageId: typeof f.thumbnailId === "number" && !VIDEO_EXT.test(`${f.thumbnail?.name ?? ""}`) ? f.thumbnailId : null,
+    imageId:
+      typeof f.thumbnailId === "number" && !VIDEO_EXT.test(`${f.thumbnail?.name ?? ""}`)
+        ? f.thumbnailId
+        : // Hassif & Delfino: vídeo com capa em imagem no formulário mostra essa capa no card.
+          HASSIF_DELFINO.has(Number(task.workspace?.id ?? task.workspaceId ?? 0)) && VIDEO_EXT.test(`${f.thumbnail?.name ?? ""}`)
+          ? capaNoFormulario(f)
+          : null,
     videoId: typeof f.thumbnailId === "number" && VIDEO_EXT.test(`${f.thumbnail?.name ?? ""}`) ? f.thumbnailId : null,
     slides: images.length,
     approved: tags.some((t) => /aprovad/i.test(`${t?.name ?? ""}`)),
