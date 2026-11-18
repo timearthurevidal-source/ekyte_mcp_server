@@ -87,7 +87,7 @@ function midiasDaPeca(p: Piece): Midia[] {
   });
 }
 
-/** Itens agendados (não publicados) de hoje em diante; mesma peça no mesmo horário vira um item só. */
+/** Itens agendados no eKyte (canal com data), não publicados, de hoje em diante; mesma peça no mesmo horário vira um item só. */
 export function agendaItems(pieces: Piece[], hoje = hojeBR()): AgendaItem[] {
   const out = new Map<string, AgendaItem>();
   for (const p of pieces) {
@@ -97,14 +97,9 @@ export function agendaItems(pieces: Piece[], hoje = hojeBR()): AgendaItem[] {
       ? `/relatorio/img/${p.imageId}?s=${sign("i", p.imageId)}`
       : m[0]?.i ?? "";
     const base = { t: p.title, k: p.kind, f: p.format, i: thumb, m, ta: p.taskTitle };
+    // Só entra o que tem rede agendada na parte de publicação do eKyte (ctcTaskFormChannel),
+    // ainda não publicado, de hoje em diante. Publicação sem canal agendado não aparece.
     const slots = (p.slots ?? []).filter((s) => !s.published && s.date >= hoje);
-    if ((p.slots ?? []).length === 0) {
-      // Sem canal cadastrado: entra só se a peça tem data futura e não foi publicada.
-      if (!p.published && p.date && p.date >= hoje && p.status === "agendada") {
-        out.set(`${p.taskId}|${p.formId}|${p.date}|`, { ...base, d: p.date, h: "", n: [...p.networks] });
-      }
-      continue;
-    }
     for (const s of slots) {
       const key = `${p.taskId}|${p.formId}|${s.date}|${s.time}`;
       const hit = out.get(key);
