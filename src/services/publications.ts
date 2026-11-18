@@ -39,6 +39,17 @@ export interface Piece {
   postUrl: string | null;
   networks: string[];      // Instagram, Facebook, TikTok, LinkedIn…
   status: PieceStatus;
+  /** Uma entrada por canal agendado no eKyte (data e hora de veiculação). */
+  slots?: Slot[];
+}
+
+/** Veiculação de uma peça num canal: data/hora no horário de Brasília. */
+export interface Slot {
+  date: string;            // AAAA-MM-DD
+  time: string;            // HH:MM ("" quando o eKyte não traz horário)
+  network: string;         // Instagram, Facebook, LinkedIn…
+  published: boolean;
+  postUrl: string | null;
 }
 
 export type PieceStatus = "publicada" | "agendada" | "entregue" | "producao";
@@ -78,6 +89,33 @@ export interface WorkspaceReport {
 
 function day(s: unknown): string | null {
   return typeof s === "string" && s.length >= 10 ? s.slice(0, 10) : null;
+}
+
+/**
+ * Data e hora de uma data do eKyte no horário de Brasília.
+ * Sem fuso no texto ("2026-11-20T10:30:00"), o eKyte já grava no horário local; com "Z" ou offset, converte.
+ * Meia-noite em ponto conta como "sem horário" (é o padrão quando só a data foi preenchida).
+ */
+export function localDateTime(s: unknown): { date: string; time: string } | null {
+  if (typeof s !== "string" || s.length < 10) return null;
+  let date = s.slice(0, 10);
+  let time = s.length >= 16 ? s.slice(11, 16) : "";
+  if (/(Z|[+-]\d\d:?\d\d)$/.test(s)) {
+    const d = new Date(s);
+    if (!Number.isNaN(d.getTime())) {
+      const parts = Object.fromEntries(
+        new Intl.DateTimeFormat("en-CA", {
+          timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+          hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+        }).formatToParts(d).map((x) => [x.type, x.value])
+      );
+      date = `${parts.year}-${parts.month}-${parts.day}`;
+      time = `${parts.hour}:${parts.minute}`;
+    }
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  if (!/^\d{2}:\d{2}$/.test(time) || time === "00:00") time = "";
+  return { date, time };
 }
 
 function clean(s: unknown, max = 140): string {
@@ -262,6 +300,19 @@ export function formToPiece(f: Record<string, any>, task: Record<string, any>): 
     postUrl,
     networks,
     status: pieceStatus(published, date, task.situation),
+    slots: channels
+      .map((c): Slot | null => {
+        const dt = localDateTime(c?.publicationDateStart);
+        if (!dt) return null;
+        const url = typeof c?.postUrl === "string" && c.postUrl ? c.postUrl : null;
+        return {
+          ...dt,
+          network: `${c?.channel?.media?.name ?? c?.channel?.name ?? ""}`,
+          published: Boolean(url) || c?.status === 3,
+          postUrl: url,
+        };
+      })
+      .filter((x): x is Slot => x !== null),
   };
 }
 
@@ -350,9 +401,9 @@ export async function buildWorkspaceReport(workspaceId: number): Promise<Workspa
 const CACHE_MS = 6 * 60 * 60 * 1000;
 const cache = new Map<number, { at: number; data: Promise<WorkspaceReport> }>();
 
-export function getWorkspaceReport(workspaceId: number, refresh = false): Promise<WorkspaceReport> {
+export function getWorkspaceReport(workspaceId: number, refresh = false, maxAgeMs = CACHE_MS): Promise<WorkspaceReport> {
   const hit = cache.get(workspaceId);
-  if (!refresh && hit && Date.now() - hit.at < CACHE_MS) return hit.data;
+  if (!refresh && hit && Date.now() - hit.at < maxAgeMs) return hit.data;
   const data = buildWorkspaceReport(workspaceId);
   cache.set(workspaceId, { at: Date.now(), data });
   data.catch(() => cache.delete(workspaceId));

@@ -3,6 +3,7 @@
  *
  *   GET /relatorio/:workspaceId?s=<assinatura>[&atualizar=1]
  *   GET /relatorio/img/:artifactId?s=<assinatura>
+ *   GET /agenda/:workspaceId?s=<assinatura do relatório>   (só o que está agendado, com data e hora)
  *
  * Os links são assinados (HMAC) — só quem recebeu o link abre a página,
  * e só as imagens que aparecem nela podem ser baixadas.
@@ -14,6 +15,7 @@ import { spawn } from "node:child_process";
 import { downloadArtifact, getWorkspaceReport, sign, verify, videoSource } from "../services/publications.js";
 import { companyUrl, getRawClient } from "../services/ekyte-client.js";
 import { renderReportPage } from "./page.js";
+import { renderAgendaPage } from "./agenda.js";
 
 type Resizer = (buf: Buffer) => Promise<Buffer>;
 let resizer: Resizer | null | undefined;
@@ -112,7 +114,33 @@ export function reportLink(baseUrl: string, workspaceId: number): string {
   return `${baseUrl.replace(/\/+$/, "")}/relatorio/${workspaceId}?s=${sign("r", workspaceId)}`;
 }
 
+export function agendaLink(baseUrl: string, workspaceId: number): string {
+  return `${baseUrl.replace(/\/+$/, "")}/agenda/${workspaceId}?s=${sign("r", workspaceId)}`;
+}
+
+/** A agenda muda mais que o histórico: relê o eKyte se a leitura tiver mais de 30 minutos. */
+const AGENDA_MAX_AGE_MS = 30 * 60 * 1000;
+
 export function registerReportRoutes(app: Express): void {
+  app.get("/agenda/:ws", async (req: Request, res: Response) => {
+    const ws = Number(req.params.ws);
+    if (!Number.isInteger(ws) || ws <= 0 || !verify("r", ws, req.query.s)) {
+      res.status(404).type("text/plain").send("Agenda não encontrada. Confira o link completo.");
+      return;
+    }
+    try {
+      const refresh = req.query.atualizar === "1";
+      const report = await getWorkspaceReport(ws, refresh, AGENDA_MAX_AGE_MS);
+      const html = renderAgendaPage(report, { refreshHref: `/agenda/${ws}?s=${req.query.s}&atualizar=1` });
+      res.setHeader("Cache-Control", "private, max-age=120");
+      res.setHeader("X-Robots-Tag", "noindex, nofollow");
+      res.type("html").send(html);
+    } catch (e) {
+      console.error(`[agenda] ws ${ws}:`, e);
+      res.status(502).type("text/plain").send("Não consegui ler o eKyte agora. Tente de novo em alguns minutos.");
+    }
+  });
+
   app.get("/relatorio/img/:id", async (req: Request, res: Response) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0 || !verify("i", id, req.query.s)) {

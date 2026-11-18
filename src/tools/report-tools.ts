@@ -12,7 +12,8 @@ import { z } from "zod";
 import { apiGet, companyV2Url, getCompanyId, handleApiError } from "../services/ekyte-client.js";
 import { CHARACTER_LIMIT } from "../constants.js";
 import { fetchTaskForms, formToPiece, getWorkspaceReport, isWorkingForm, sign } from "../services/publications.js";
-import { reportLink } from "../report/routes.js";
+import { agendaLink, reportLink } from "../report/routes.js";
+import { agendaItems } from "../report/agenda.js";
 
 function stripHtml(html: string | null | undefined): string {
   if (!html) return "";
@@ -251,6 +252,8 @@ refresh=true força uma nova leitura do eKyte (senão usa o cache de até 6 hora
           pieces_without_image: r.pieces.filter((p) => !p.imageId).length,
           other_deliveries: r.others.map((o) => `${o.date} · ${o.title}`),
           report_url: domain ? reportLink(domain, workspace_id) : `(defina PUBLIC_URL) /relatorio/${workspace_id}?s=${sign("r", workspace_id)}`,
+          agenda_url: domain ? agendaLink(domain, workspace_id) : `(defina PUBLIC_URL) /agenda/${workspace_id}?s=${sign("r", workspace_id)}`,
+          agendadas: agendaItems(r.pieces).slice(0, 40).map((a) => `${a.d} ${a.h || "--:--"} · ${a.n.join("/") || "sem rede"} · ${a.t}`),
         };
         return { content: [{ type: "text" as const, text: JSON.stringify(out, null, 1) }] };
       } catch (error) {
