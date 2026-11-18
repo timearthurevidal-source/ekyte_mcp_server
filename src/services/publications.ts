@@ -41,6 +41,39 @@ export interface Piece {
   status: PieceStatus;
   /** Uma entrada por canal agendado no eKyte (data e hora de veiculação). */
   slots?: Slot[];
+  /** Todos os arquivos da publicação (lâminas do carrossel, vídeo, capa), na ordem do formulário. */
+  media?: MediaFile[];
+}
+
+export interface MediaFile {
+  id: number;
+  video: boolean;
+}
+
+/** Arquivos de imagem e vídeo anexados à publicação; a capa entra primeiro se não estiver no formulário. */
+export function mediaDaPublicacao(f: Record<string, any>): MediaFile[] {
+  const out: MediaFile[] = [];
+  const seen = new Set<number>();
+  const push = (id: unknown, name: unknown) => {
+    if (typeof id !== "number" || seen.has(id)) return;
+    const n = `${name ?? ""}`;
+    const video = VIDEO_EXT.test(n);
+    if (!video && !IMAGE_EXT.test(n)) return;
+    seen.add(id);
+    out.push({ id, video });
+  };
+  for (const v of Object.values(parseValues(f.values))) {
+    if (!Array.isArray(v)) continue;
+    for (const a of v) push(a?.id, a?.name);
+  }
+  if (typeof f.thumbnailId === "number" && !seen.has(f.thumbnailId)) {
+    const n = `${f.thumbnail?.name ?? ""}`;
+    if (VIDEO_EXT.test(n) || IMAGE_EXT.test(n)) {
+      seen.add(f.thumbnailId);
+      out.unshift({ id: f.thumbnailId, video: VIDEO_EXT.test(n) });
+    }
+  }
+  return out;
 }
 
 /** Veiculação de uma peça num canal: data/hora no horário de Brasília. */
@@ -300,6 +333,7 @@ export function formToPiece(f: Record<string, any>, task: Record<string, any>): 
     postUrl,
     networks,
     status: pieceStatus(published, date, task.situation),
+    media: mediaDaPublicacao(f),
     slots: channels
       .map((c): Slot | null => {
         const dt = localDateTime(c?.publicationDateStart);

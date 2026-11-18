@@ -19,23 +19,43 @@ import { renderAgendaPage } from "./agenda.js";
 
 type Resizer = (buf: Buffer) => Promise<Buffer>;
 let resizer: Resizer | null | undefined;
+let bigResizer: Resizer | null | undefined;
+
+async function loadSharp(): Promise<any | null> {
+  try {
+    const mod: any = await import("sharp");
+    return mod.default ?? mod;
+  } catch (e) {
+    console.error("[report] sharp indisponível, imagens vão no tamanho original:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
 
 async function getResizer(): Promise<Resizer | null> {
   if (resizer !== undefined) return resizer;
-  try {
-    const mod: any = await import("sharp");
-    const sharp = mod.default ?? mod;
-    resizer = (buf) => sharp(buf, { failOn: "none" }).rotate().resize({ width: 520, withoutEnlargement: true }).webp({ quality: 74 }).toBuffer();
-  } catch (e) {
-    console.error("[report] sharp indisponível, imagens vão no tamanho original:", e instanceof Error ? e.message : e);
-    resizer = null;
-  }
+  const sharp = await loadSharp();
+  resizer = sharp
+    ? (buf) => sharp(buf, { failOn: "none" }).rotate().resize({ width: 520, withoutEnlargement: true }).webp({ quality: 74 }).toBuffer()
+    : null;
   return resizer;
+}
+
+/** Versão grande (visualizador da agenda): até 1600 px. */
+async function getBigResizer(): Promise<Resizer | null> {
+  if (bigResizer !== undefined) return bigResizer;
+  const sharp = await loadSharp();
+  bigResizer = sharp
+    ? (buf) => sharp(buf, { failOn: "none" }).rotate().resize({ width: 1600, withoutEnlargement: true }).webp({ quality: 84 }).toBuffer()
+    : null;
+  return bigResizer;
 }
 
 // Miniaturas em memória (cada uma ~30–60 KB).
 const thumbs = new Map<number, { buf: Buffer; type: string }>();
 const MAX_THUMBS = 800;
+// Imagens grandes (~150–400 KB): poucas em memória.
+const bigImages = new Map<number, { buf: Buffer; type: string }>();
+const MAX_BIG = 120;
 
 // ---- capa de vídeo: um quadro extraído com ffmpeg
 const VIDEO_CONCURRENCY = 2;
@@ -147,15 +167,18 @@ export function registerReportRoutes(app: Express): void {
       res.status(404).end();
       return;
     }
+    const grande = req.query.g === "1";
+    const cacheMap = grande ? bigImages : thumbs;
+    const limite = grande ? MAX_BIG : MAX_THUMBS;
     try {
-      let hit = thumbs.get(id);
+      let hit = cacheMap.get(id);
       if (!hit) {
         const original = await downloadArtifact(id);
         if (!/^image\//i.test(original.type)) {
           res.status(415).end();
           return;
         }
-        const resize = await getResizer();
+        const resize = grande ? await getBigResizer() : await getResizer();
         hit = original;
         if (resize) {
           try {
@@ -164,8 +187,8 @@ export function registerReportRoutes(app: Express): void {
             /* mantém original */
           }
         }
-        if (thumbs.size >= MAX_THUMBS) thumbs.delete(thumbs.keys().next().value as number);
-        thumbs.set(id, hit);
+        if (cacheMap.size >= limite) cacheMap.delete(cacheMap.keys().next().value as number);
+        cacheMap.set(id, hit);
       }
       res.setHeader("Content-Type", hit.type);
       res.setHeader("Cache-Control", "public, max-age=2592000, immutable");

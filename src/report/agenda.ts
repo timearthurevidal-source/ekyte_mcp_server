@@ -58,20 +58,45 @@ export interface AgendaItem {
   k: string;      // tipo (carrossel, estatico…)
   f: string;      // nome do formato no eKyte
   n: string[];    // redes
-  i: string;      // miniatura assinada
+  i: string;      // capa (miniatura assinada)
+  m: Midia[];     // todas as imagens/vídeos da publicação, para o visualizador
   ta: string;     // tarefa
+}
+
+/** Um arquivo no visualizador: imagem (i miniatura, g grande) ou vídeo (v arquivo, i quadro de capa). */
+export interface Midia {
+  i: string;
+  g?: string;
+  v?: string;
+}
+
+function midiasDaPeca(p: Piece): Midia[] {
+  const files = p.media && p.media.length
+    ? p.media
+    : [
+        ...(p.videoId ? [{ id: p.videoId, video: true }] : []),
+        ...(p.imageId ? [{ id: p.imageId, video: false }] : []),
+      ];
+  return files.map((f) => {
+    if (f.video) {
+      const s = sign("v", f.id);
+      return { i: `/relatorio/vthumb/${f.id}?s=${s}`, v: `/relatorio/video/${f.id}?s=${s}` };
+    }
+    const s = sign("i", f.id);
+    return { i: `/relatorio/img/${f.id}?s=${s}`, g: `/relatorio/img/${f.id}?s=${s}&g=1` };
+  });
 }
 
 /** Itens agendados (não publicados) de hoje em diante; mesma peça no mesmo horário vira um item só. */
 export function agendaItems(pieces: Piece[], hoje = hojeBR()): AgendaItem[] {
   const out = new Map<string, AgendaItem>();
   for (const p of pieces) {
+    const m = midiasDaPeca(p);
+    // Capa: a imagem da capa do eKyte, senão o primeiro arquivo da publicação.
     const thumb = p.imageId
       ? `/relatorio/img/${p.imageId}?s=${sign("i", p.imageId)}`
-      : p.videoId
-        ? `/relatorio/vthumb/${p.videoId}?s=${sign("v", p.videoId)}`
-        : "";
-    const base = { t: p.title, k: p.kind, f: p.format, i: thumb, ta: p.taskTitle };
+      : m[0]?.i ?? "";
+    const base = { t: p.title, k: p.kind, f: p.format, i: thumb, m, ta: p.taskTitle };
     const slots = (p.slots ?? []).filter((s) => !s.published && s.date >= hoje);
     if ((p.slots ?? []).length === 0) {
       // Sem canal cadastrado: entra só se a peça tem data futura e não foi publicada.
@@ -170,7 +195,31 @@ main{padding-block:8px 40px}
 .dia-cab h2{font-size:18px;font-weight:700;margin:0}
 .dia-cab .tag{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;background:var(--destaque);color:#fff;border-radius:999px;padding:2px 9px}
 .dia-cab .qtd{margin-left:auto;font-size:13px;color:var(--cinza)}
-.item{display:grid;grid-template-columns:72px 56px minmax(0,1fr);gap:14px;align-items:center;background:var(--branco);border:1px solid var(--linha);border-radius:14px;padding:12px 14px;margin-bottom:8px}
+.item{display:grid;grid-template-columns:72px 96px minmax(0,1fr);gap:16px;align-items:center;background:var(--branco);border:1px solid var(--linha);border-radius:14px;padding:12px 14px;margin-bottom:8px}
+.item.abre{cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.item.abre:hover{border-color:var(--marca);box-shadow:0 4px 18px rgba(0,0,0,.06)}
+.capa{position:relative;width:96px;height:120px;border-radius:10px;overflow:hidden;background:var(--marca-clara)}
+.capa img{width:100%;height:100%;object-fit:cover}
+.capa .selo{position:absolute;left:6px;bottom:6px;background:rgba(0,0,0,.62);color:#fff;font-size:11.5px;font-weight:600;border-radius:999px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px}
+.capa .play{position:absolute;inset:0;display:grid;place-items:center}
+.capa .play span{width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.55);display:grid;place-items:center}
+.capa .play span::before{content:"";border-left:12px solid #fff;border-top:8px solid transparent;border-bottom:8px solid transparent;margin-left:3px}
+.ver{font-size:12.5px;font-weight:600;color:var(--marca);margin-top:6px;display:inline-block}
+
+#visor{position:fixed;inset:0;z-index:50;background:rgba(10,11,12,.97);display:flex;flex-direction:column}
+#visor .barra{display:flex;align-items:center;gap:12px;padding:12px 16px;color:#fff}
+#visor .barra .tit{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#visor .barra .sub{font-size:13px;opacity:.7;font-weight:400}
+#visor button{background:rgba(255,255,255,.12);border:0;color:#fff;border-radius:999px;cursor:pointer;display:grid;place-items:center}
+#visor button:hover{background:rgba(255,255,255,.22)}
+#v-fechar{width:40px;height:40px;font-size:22px;line-height:1}
+#visor .palco{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;gap:12px;padding:0 12px 12px}
+#visor .midia{flex:1;min-width:0;height:100%;display:flex;align-items:center;justify-content:center}
+#visor .midia img,#visor .midia video{max-width:100%;max-height:100%;border-radius:8px;object-fit:contain;background:#000}
+.seta{width:44px;height:44px;font-size:22px;flex:none}
+#visor .pontos{display:flex;justify-content:center;gap:6px;padding:0 0 16px}
+#visor .pontos i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.3)}
+#visor .pontos i.on{background:#fff}
 .hora{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .hora.sem{font-size:12.5px;font-weight:600;color:var(--cinza);line-height:1.25}
 .thumb{width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--marca-clara)}
@@ -193,8 +242,11 @@ footer .dir{font-size:13px;text-align:right}
 
 @media (max-width:640px){
   .top .meta{font-size:12px}
-  .item{grid-template-columns:56px minmax(0,1fr);gap:10px}
-  .item .thumb{display:none}
+  .item{grid-template-columns:52px 76px minmax(0,1fr);gap:10px;padding:10px}
+  .capa{width:76px;height:95px}
+  .seta{position:absolute;top:50%;transform:translateY(-50%);z-index:2;background:rgba(0,0,0,.45)!important}
+  #v-ant{left:8px} #v-prox{right:8px}
+  #visor .palco{position:relative;padding:0 0 12px}
   .hora{font-size:17px}
   .filtros{position:static}
   .dia-cab{flex-wrap:wrap}
@@ -228,6 +280,16 @@ footer .dir{font-size:13px;text-align:right}
 </div></nav>
 
 <main class="wrap" id="lista" aria-live="polite"></main>
+
+<div id="visor" hidden role="dialog" aria-modal="true" aria-labelledby="v-tit">
+  <div class="barra"><div class="tit" id="v-tit"></div><button type="button" id="v-fechar" aria-label="Fechar">×</button></div>
+  <div class="palco">
+    <button type="button" class="seta" id="v-ant" aria-label="Anterior">‹</button>
+    <div class="midia" id="v-midia"></div>
+    <button type="button" class="seta" id="v-prox" aria-label="Próxima">›</button>
+  </div>
+  <div class="pontos" id="v-pontos"></div>
+</div>
 
 <footer><div class="wrap">
   <div>${logo(b.logoEscura, b, "marca-txt")}<p>${esc(b.assinatura)}</p></div>
@@ -279,11 +341,15 @@ function render(){
     h+='<section class="dia"><div class="dia-cab"><h2>'+esc(nomeDia(d))+'</h2>'+(rel?'<span class="tag">'+rel+'</span>':"")+'<span class="qtd">'+plural(dias[d].length,"publicação","publicações")+'</span></div>';
     dias[d].forEach(function(it){
       var tipo=D.kinds[it.k]||it.f;
-      h+='<article class="item">'
+      var idx=D.itens.indexOf(it),tem=it.m.length>0,ehVideo=tem&&it.m[0].v;
+      var selo=it.m.length>1?'<span class="selo">'+it.m.length+(it.k==="carrossel"?" lâminas":" arquivos")+'</span>':"";
+      var capa=it.i?'<img loading="lazy" alt="" src="'+esc(it.i)+'">':'<div class="thumb vazia" style="width:100%;height:100%;--tc:'+(COR[it.k]||"var(--cinza)")+'"></div>';
+      h+='<article class="item'+(tem?' abre':'')+'"'+(tem?' role="button" tabindex="0" data-i="'+idx+'" aria-label="Ver: '+esc(it.t)+'"':'')+'>'
         +(it.h?'<div class="hora">'+esc(it.h)+'</div>':'<div class="hora sem">Horário a definir</div>')
-        +(it.i?'<img class="thumb" loading="lazy" alt="" src="'+esc(it.i)+'">':'<div class="thumb vazia" style="--tc:'+(COR[it.k]||"var(--cinza)")+'"></div>')
+        +'<div class="capa">'+capa+(ehVideo?'<span class="play"><span></span></span>':'')+selo+'</div>'
         +'<div class="info"><div class="tit">'+esc(it.t)+'</div><div class="det"><span class="tipo" style="background:'+(COR[it.k]||"var(--cinza)")+'">'+esc(tipo)+'</span>'
-        +it.n.map(function(r){return'<span class="rede">'+esc(r)+'</span>'}).join("")+'</div></div></article>';
+        +it.n.map(function(r){return'<span class="rede">'+esc(r)+'</span>'}).join("")+'</div>'
+        +(tem?'<span class="ver">'+(ehVideo?"Assistir":it.m.length>1?"Ver lâminas":"Ver arte")+' →</span>':'')+'</div></article>';
     });
     h+="</section>";
   });
@@ -293,8 +359,32 @@ function render(){
   var p=D.itens[0];if(!p)return;
   var rel=relativo(p.d),el=document.getElementById("proxima");
   el.innerHTML=(p.i?'<img alt="" src="'+esc(p.i)+'">':"")+'<div class="quando"><div class="rot">Próxima publicação</div><div class="data">'+esc(rel?rel+", "+nomeDia(p.d).split(",").slice(1).join(",").trim():nomeDia(p.d))+(p.h?" às "+esc(p.h):"")+'</div><div class="tit">'+esc(p.t)+(p.n.length?" · "+esc(p.n.join(", ")):"")+'</div></div>';
+  if(p.m.length){el.style.cursor="pointer";el.setAttribute("role","button");el.tabIndex=0;el.onclick=function(){vAbre(0,el)};el.onkeydown=function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();vAbre(0,el)}}}
   el.hidden=false;
 })();
+var V={it:null,pos:0,volta:null},visor=document.getElementById("visor");
+function vMostra(){
+  var it=V.it,m=it.m[V.pos],el=document.getElementById("v-midia");
+  el.innerHTML=m.v?'<video controls autoplay playsinline preload="metadata" poster="'+esc(m.i)+'" src="'+esc(m.v)+'"></video>':'<img alt="'+esc(it.t)+'" src="'+esc(m.g||m.i)+'">';
+  var mais=it.m.length>1;
+  document.getElementById("v-ant").hidden=!mais;document.getElementById("v-prox").hidden=!mais;
+  document.getElementById("v-pontos").innerHTML=mais?it.m.map(function(_,i){return'<i class="'+(i===V.pos?"on":"")+'"></i>'}).join(""):"";
+  document.getElementById("v-tit").innerHTML=esc(it.t)+'<div class="sub">'+esc(nomeDia(it.d))+(it.h?" às "+esc(it.h):"")+(it.n.length?" · "+esc(it.n.join(", ")):"")+(mais?" · "+(V.pos+1)+" de "+it.m.length:"")+'</div>';
+  if(mais){var prox=it.m[(V.pos+1)%it.m.length];if(!prox.v){var pre=new Image();pre.src=prox.g||prox.i}}
+}
+function vAbre(i,orig){V.it=D.itens[i];V.pos=0;V.volta=orig;if(!V.it||!V.it.m.length)return;visor.hidden=false;document.body.style.overflow="hidden";vMostra();document.getElementById("v-fechar").focus()}
+function vFecha(){visor.hidden=true;document.getElementById("v-midia").innerHTML="";document.body.style.overflow="";if(V.volta)V.volta.focus()}
+function vPassa(d){if(!V.it)return;var n=V.it.m.length;V.pos=(V.pos+d+n)%n;vMostra()}
+document.getElementById("v-fechar").onclick=vFecha;
+document.getElementById("v-ant").onclick=function(){vPassa(-1)};
+document.getElementById("v-prox").onclick=function(){vPassa(1)};
+visor.addEventListener("click",function(e){if(e.target===visor||e.target.classList.contains("palco")||e.target.id==="v-midia")vFecha()});
+document.addEventListener("keydown",function(e){if(visor.hidden)return;if(e.key==="Escape")vFecha();else if(e.key==="ArrowLeft")vPassa(-1);else if(e.key==="ArrowRight")vPassa(1)});
+var tx=null;visor.addEventListener("touchstart",function(e){tx=e.touches[0].clientX},{passive:true});
+visor.addEventListener("touchend",function(e){if(tx===null)return;var dx=e.changedTouches[0].clientX-tx;tx=null;if(Math.abs(dx)>50)vPassa(dx<0?1:-1)});
+var lista=document.getElementById("lista");
+lista.addEventListener("click",function(e){var t=e.target.closest&&e.target.closest("[data-i]");if(t)vAbre(+t.getAttribute("data-i"),t)});
+lista.addEventListener("keydown",function(e){if(e.key!=="Enter"&&e.key!==" ")return;var t=e.target.closest&&e.target.closest("[data-i]");if(t){e.preventDefault();vAbre(+t.getAttribute("data-i"),t)}});
 montaFiltros();render();
 </script>
 </body>
